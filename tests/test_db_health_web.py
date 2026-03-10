@@ -93,3 +93,48 @@ class TestDbBrowse:
             response = client.get("/db/browse")
         assert response.status_code == 200
         assert response.json()["path"] == ""
+
+
+class TestDbSetPath:
+    def test_valid_path_updates_config_and_redirects(self, tmp_path):
+        fake_db = tmp_path / "real.gnucash"
+        fake_db.touch()
+        fake_config = tmp_path / "config.py"
+        fake_config.write_text(
+            'GNUCASH_DB_PATH = Path(r"D:\\old\\path.gnucash")\n'
+        )
+        with patch("bill_processor.web.app.CONFIG_FILE_PATH", fake_config):
+            response = client.post(
+                "/db/set-path",
+                data={"new_path": str(fake_db)},
+                follow_redirects=False,
+            )
+        assert response.status_code == 303
+        assert response.headers["location"] == "/"
+        new_text = fake_config.read_text()
+        assert str(fake_db) in new_text
+
+    def test_empty_path_shows_error(self):
+        with patch("bill_processor.gnucash_db.check_db_health", return_value=MISSING):
+            response = client.post("/db/set-path", data={"new_path": ""})
+        assert response.status_code == 200
+        assert "No path" in response.text or "path_error" in response.text
+
+    def test_nonexistent_file_shows_error(self, tmp_path):
+        missing = tmp_path / "nonexistent.gnucash"
+        with patch("bill_processor.gnucash_db.check_db_health", return_value=MISSING):
+            response = client.post(
+                "/db/set-path", data={"new_path": str(missing)}
+            )
+        assert response.status_code == 200
+        assert "not found" in response.text.lower() or "does not exist" in response.text.lower()
+
+    def test_wrong_extension_shows_error(self, tmp_path):
+        wrong = tmp_path / "file.sqlite"
+        wrong.touch()
+        with patch("bill_processor.gnucash_db.check_db_health", return_value=MISSING):
+            response = client.post(
+                "/db/set-path", data={"new_path": str(wrong)}
+            )
+        assert response.status_code == 200
+        assert "gnucash" in response.text.lower()

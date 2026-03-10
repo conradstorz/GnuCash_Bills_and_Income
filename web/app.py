@@ -26,6 +26,8 @@ from bill_processor.vendor_sync import VendorSyncUtility
 from bill_processor.web import queue_io
 
 BASE_DIR = Path(__file__).parent
+# Path to config.py — patched in tests for POST /db/set-path
+CONFIG_FILE_PATH = Path(__file__).parent.parent / "config.py"
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 app = FastAPI(title="GnuCash Bill Processor")
@@ -573,6 +575,51 @@ async def db_browse():
     except Exception:
         path = ""
     return {"path": path}
+
+
+@app.post("/db/set-path")
+async def db_set_path(request: Request):
+    """Write a new GNUCASH_DB_PATH to config.py and reload config."""
+    import re
+    import importlib
+    from fastapi.responses import RedirectResponse
+    from bill_processor import config as cfg
+
+    form = await request.form()
+    new_path = (form.get("new_path") or "").strip()
+
+    def _error(msg: str):
+        health = gnucash_db.check_db_health()
+        return templates.TemplateResponse(
+            request, "db_unavailable.html",
+            {"health": health, "path_error": msg}
+        )
+
+    if not new_path:
+        return _error("No path provided.")
+
+    if not new_path.lower().endswith(".gnucash"):
+        return _error("File must have a .gnucash extension.")
+
+    if not Path(new_path).exists():
+        return _error(f"File not found: {new_path}")
+
+    # Update config.py in place
+    config_text = CONFIG_FILE_PATH.read_text(encoding="utf-8")
+    new_text, count = re.subn(
+        r'(GNUCASH_DB_PATH\s*=\s*Path\(r?)["\'].*?["\'](\))',
+        lambda m: f'{m.group(1)}r"{new_path}"{m.group(2)}',
+        config_text,
+    )
+    if count == 0:
+        return _error("Could not update config.py — GNUCASH_DB_PATH line not found.")
+
+    CONFIG_FILE_PATH.write_text(new_text, encoding="utf-8")
+
+    # Reload config so the running server picks up the change immediately
+    importlib.reload(cfg)
+
+    return RedirectResponse(url="/", status_code=303)
 
 
 @app.post("/shutdown")
