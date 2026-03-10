@@ -26,6 +26,7 @@ python vendor_sync.py
 
 # Web dashboard (use uv run — uvicorn is managed via uv)
 uv run uvicorn bill_processor.web.app:app --reload --port 7432
+# Or double-click GnuCash Bills.bat (desktop launcher — opens browser automatically)
 # Access at http://localhost:7432
 ```
 
@@ -91,6 +92,8 @@ The dashboard uses a split-screen layout: bills panel (left) and cash entry pane
 
 **Sign convention:** positive amount = cash into SAMUSE; negative = cash out. The SAMUSE split is auto-calculated as the balancing entry.
 
+**Dashboard DB health check:** `GET /` calls `check_db_health()` before rendering. If the database is missing or locked, renders `db_unavailable.html` with full details and recovery options (browse for file, refresh, shut down).
+
 **New web routes** (`web/app.py`):
 
 | Route | Purpose |
@@ -99,6 +102,8 @@ The dashboard uses a split-screen layout: bills panel (left) and cash entry pane
 | `GET /clients/datalist` | Returns `<datalist>` HTML for client autocomplete |
 | `GET /clients/search` | JSON client name search |
 | `POST /cash/submit` | Validates and posts cash batch to GnuCash |
+| `GET /db/browse` | Opens native Windows file picker (tkinter subprocess), returns `{"path": "..."}` |
+| `POST /db/set-path` | Validates path, writes new `GNUCASH_DB_PATH` to `config.py`, reloads config, redirects to `/` |
 
 **Cash-related data files:**
 - `data/clients.json` — flat list of 15–45 client names for autocomplete; edit manually
