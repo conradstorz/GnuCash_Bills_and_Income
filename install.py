@@ -44,5 +44,18 @@ def update_config(config_path: Path, project_root: Path, db_path: Path) -> None:
     config_path.write_text(new_text, encoding="utf-8")
 
 
+def search_for_gnucash(search_root: Path) -> list:
+    """Search search_root recursively for *.gnucash files.
+
+    Returns list of Paths sorted newest-modified first.
+    Returns empty list if search_root does not exist.
+    """
+    if not search_root.exists():
+        return []
+    files = list(search_root.rglob("*.gnucash"))
+    files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return files
+
+
 if __name__ == "__main__":
     print("Installer not yet fully implemented.")

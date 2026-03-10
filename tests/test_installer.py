@@ -65,3 +65,40 @@ class TestUpdateConfig:
         with pytest.raises(ValueError):
             install.update_config(cfg, Path(r"C:\x"), Path(r"C:\x\db.gnucash"))
         assert cfg.read_text(encoding="utf-8") == original
+
+
+class TestSearchForGnucash:
+    def test_finds_gnucash_files(self, tmp_path):
+        (tmp_path / "a.gnucash").touch()
+        (tmp_path / "b.gnucash").touch()
+        results = install.search_for_gnucash(tmp_path)
+        assert len(results) == 2
+
+    def test_ignores_non_gnucash_files(self, tmp_path):
+        (tmp_path / "a.gnucash").touch()
+        (tmp_path / "b.sqlite").touch()
+        results = install.search_for_gnucash(tmp_path)
+        assert len(results) == 1
+
+    def test_searches_subdirectories(self, tmp_path):
+        sub = tmp_path / "sub" / "deep"
+        sub.mkdir(parents=True)
+        (sub / "nested.gnucash").touch()
+        results = install.search_for_gnucash(tmp_path)
+        assert len(results) == 1
+        assert results[0].name == "nested.gnucash"
+
+    def test_returns_empty_for_missing_directory(self, tmp_path):
+        results = install.search_for_gnucash(tmp_path / "nonexistent")
+        assert results == []
+
+    def test_sorts_newest_first(self, tmp_path):
+        import time
+        old = tmp_path / "old.gnucash"
+        old.touch()
+        time.sleep(0.05)
+        new = tmp_path / "new.gnucash"
+        new.touch()
+        results = install.search_for_gnucash(tmp_path)
+        assert results[0].name == "new.gnucash"
+        assert results[1].name == "old.gnucash"
