@@ -1,0 +1,28 @@
+<form hx-post="/bills/queue" hx-target="#bill-entry-form" hx-swap="innerHTML">
+  <label for="vendor-input">Vendor</label>
+  <div class="dropdown">
+    <input type="text" name="vendor_name" id="vendor-input" required autocomplete="off"
+           hx-get="/vendors/search"
+           hx-trigger="keyup changed delay:300ms"
+           hx-target="#vendor-dropdown"
+           hx-include="[name='vendor_name']">
+    <div id="vendor-dropdown"></div>
+  </div>
+  <div id="new-vendor-section"></div>
+
+  <label for="amount-input">Amount ($)</label>
+  <input type="number" name="amount" id="amount-input" step="0.01" min="0.01" required>
+
+  <label for="memo-input">Memo</label>
+  <input type="text" name="memo" id="memo-input" placeholder="optional">
+
+  <label for="date-input">Date</label>
+  <input type="date" name="bill_date" id="date-input" value="{{ today }}">
+
+  <div style="margin-top:1rem">
+    <button type="submit" class="btn-primary">Add to Queue</button>
+  </div>
+</form>
+{% if success is defined and success %}
+<p class="success-msg">{{ success }}</p>
+{% endif %}

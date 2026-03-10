@@ -1,0 +1,31 @@
+<tr class="cash-row">
+  <td>
+    <select name="account_guid" required>
+      <option value="">-- Account --</option>
+      {% for acct in cash_accounts %}
+      <option value="{{ acct.guid }}">{{ acct.name }}</option>
+      {% endfor %}
+    </select>
+  </td>
+  <td>
+    <input type="text"
+           name="memo"
+           placeholder="Client name"
+           autocomplete="off"
+           list="client-list"
+           required>
+  </td>
+  <td>
+    <input type="number"
+           name="amount"
+           step="0.01"
+           placeholder="0.00"
+           class="amount-input"
+           oninput="updateSamuseTotal()"
+           required>
+  </td>
+  <td>
+    <button type="button"
+            onclick="this.closest('tr').remove(); updateSamuseTotal()">&#x2715;</button>
+  </td>
+</tr>

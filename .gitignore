@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.venv/
+venv/
+dist/
+build/
+
+# Environment
+.env
+
+# Logs
+logs/
+
+# Test artifacts
+.pytest_cache/
+tests/.coverage
+tests/htmlcov/
+htmlcov/
+.coverage
+
+# GnuCash schema cache (auto-generated)
+gnucash_schema.json
+
+# Columbo snapshots (working files, not source)
+snapshot_before.json
+snapshot_after.json
+columbo_report.txt
+
+# Tool-specific
+.claude/
+.hypothesis/
+
+# Editor / OS
+.vscode/
+*.swp
+Thumbs.db

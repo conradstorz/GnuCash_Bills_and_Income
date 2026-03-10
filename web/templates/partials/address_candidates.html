@@ -1,0 +1,35 @@
+{% if candidates %}
+<div style="margin-top:0.25rem; border:1px solid #aaa; border-radius:4px; overflow:hidden">
+  <div style="padding:0.3rem 0.6rem; background:#f5f5f5; font-size:0.8rem; color:#555">
+    {{ candidates | length }} result{% if candidates | length != 1 %}s{% endif %} — select a match or edit the fields below manually
+  </div>
+  <div style="max-height:10rem; overflow-y:auto">
+  {% for c in candidates %}
+  <div class="dropdown-item"
+       style="border-top:1px solid #eee"
+       data-addr1="{{ c.addr_line1 | e }}"
+       data-addr2="{{ c.addr_line2 | e }}"
+       data-phone="{{ (c.phone or '') | e }}"
+       onclick="
+         var a2 = this.dataset.addr2;
+         var m = a2.match(/^(.*),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+         document.getElementById('new-vendor-addr1').value = this.dataset.addr1;
+         document.getElementById('new-vendor-addr2').value = '';
+         document.getElementById('new-vendor-city').value = m ? m[1] : '';
+         document.getElementById('new-vendor-state').value = m ? m[2] : '';
+         document.getElementById('new-vendor-zip').value = m ? m[3] : '';
+         document.getElementById('new-vendor-phone').value = this.dataset.phone;
+         document.getElementById('address-candidates').innerHTML = '';
+       ">
+    <strong>{{ c.name | e }}</strong>
+    {% if c.distance is defined and c.distance is not none %}
+      <span style="color:#888; font-size:0.85rem">({{ "%.1f" | format(c.distance) }} mi)</span>
+    {% endif %}
+    <br><small style="color:#555">{{ c.formatted_address | e }}</small>
+  </div>
+  {% endfor %}
+  </div>
+</div>
+{% elif message %}
+<p class="error-msg" style="margin-top:0.25rem">{{ message | e }}</p>
+{% endif %}

@@ -1,0 +1,42 @@
+<div class="card" id="queued-bills"
+     hx-get="/partials/queued-bills"
+     hx-trigger="every 30s"
+     hx-swap="outerHTML">
+  <h2>Queued Bills</h2>
+  {% if last_error %}
+  <p class="error-msg">&#9888; {{ last_error }}</p>
+  {% endif %}
+  {% if queue %}
+    <p class="status-warn">&#9888; {{ queue|length }} bill(s) waiting to be processed</p>
+    <table>
+      <thead><tr><th>Vendor</th><th>Amount</th><th>Memo</th><th>Date</th><th></th></tr></thead>
+      <tbody>
+        {% for bill in queue %}
+        <tr>
+          <td>{{ bill.vendor_name }}</td>
+          <td>${{ "%.2f"|format(bill.amount) }}</td>
+          <td>{{ bill.memo }}</td>
+          <td>{{ bill.date }}</td>
+          <td>
+            <button hx-post="/bills/queue/{{ bill._index }}/process"
+                    hx-target="#queued-bills"
+                    hx-swap="outerHTML">Process</button>
+            <button hx-delete="/bills/queue/{{ bill._index }}"
+                    hx-target="#queued-bills"
+                    hx-swap="outerHTML"
+                    hx-confirm="Remove this bill from the queue?">Remove</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div style="margin-top:0.75rem">
+      <button class="btn-primary"
+        hx-post="/bills/queue/process"
+        hx-target="#queued-bills"
+        hx-swap="outerHTML">Process All</button>
+    </div>
+  {% else %}
+    <p class="status-ok">&#10003; No bills queued</p>
+  {% endif %}
+</div>

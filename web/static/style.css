@@ -1,0 +1,62 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: sans-serif; max-width: 1600px; margin: 0 auto; padding: 1rem; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; border-bottom: 2px solid #333; margin-bottom: 1.5rem; }
+h1 { font-size: 1.4rem; }
+nav { display: flex; gap: 1rem; align-items: center; }
+
+.card { border: 1px solid #ccc; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+.card h2 { font-size: 1rem; text-transform: uppercase; color: #555; margin-bottom: 0.75rem; }
+.status-ok { color: green; }
+.status-warn { color: orange; }
+
+button, .btn { cursor: pointer; padding: 0.4rem 0.9rem; border-radius: 4px; border: 1px solid #555; background: #f0f0f0; font-size: 0.9rem; }
+button:disabled, .btn-disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-danger { background: #fee; border-color: #c00; color: #c00; }
+.btn-primary { background: #e8f4e8; border-color: #2a7a2a; color: #1a5a1a; }
+
+form label { display: block; font-size: 0.85rem; color: #444; margin-bottom: 0.2rem; margin-top: 0.6rem; }
+form input, form textarea { width: 100%; padding: 0.4rem; border: 1px solid #aaa; border-radius: 4px; font-size: 0.95rem; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 2px solid #aaa; }
+td { padding: 0.35rem 0.6rem; border-bottom: 1px solid #eee; }
+
+.dropdown { position: relative; }
+.dropdown-list { position: absolute; z-index: 10; background: white; border: 1px solid #aaa; border-radius: 4px; width: 100%; max-height: 200px; overflow-y: auto; }
+.dropdown-item { padding: 0.4rem 0.6rem; cursor: pointer; }
+.dropdown-item:hover { background: #f0f4ff; }
+
+.error-msg { color: #c00; background: #fee; border: 1px solid #fcc; padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; }
+.success-msg { color: #1a5; background: #efe; border: 1px solid #cfc; padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; }
+
+#new-vendor-form { background: #fffbe6; border: 1px solid #e0d070; border-radius: 4px; padding: 0.75rem; margin-top: 0.5rem; }
+
+/* Split-screen dashboard layout */
+.dashboard-split {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.panel {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+@media (max-width: 800px) {
+  .dashboard-split {
+    flex-direction: column;
+  }
+}
+
+/* Cash entry panel */
+.samuse-total {
+  font-weight: bold;
+  text-align: right;
+  padding: 0.5rem 0;
+}
+
+.form-actions {
+  margin-top: 1rem;
+  text-align: right;
+}
