@@ -6,7 +6,7 @@ from bill_processor.web.app import app
 
 client = TestClient(app)
 
-HEALTHY = {"status": "ok", "message": "OK", "path": "/fake/db.gnucash",
+HEALTHY = {"status": "ok", "message": "Database is accessible.", "path": "/fake/db.gnucash",
            "hostname": None, "pid": None}
 MISSING = {"status": "missing",
            "message": "Database file not found at the configured path.",
@@ -19,12 +19,17 @@ LOCKED  = {"status": "locked",
 class TestGetDashboardHealthCheck:
     def test_healthy_db_renders_dashboard(self):
         with patch("bill_processor.gnucash_db.check_db_health", return_value=HEALTHY), \
+             patch("bill_processor.web.queue_io.read_queue", return_value=[]), \
+             patch("bill_processor.gnucash_db.get_all_vendors", return_value=[]), \
+             patch("bill_processor.vendor_manager.VendorManager") as mock_vm, \
              patch("bill_processor.gnucash_db.get_unpaid_bills", return_value=[]), \
              patch("bill_processor.gnucash_db.get_cash_accounts", return_value=[]), \
              patch("bill_processor.gnucash_db.get_checking_accounts", return_value=[]):
+            mock_vm.return_value.vendors = {"vendors": {}}
             response = client.get("/")
         assert response.status_code == 200
         assert "Database Unavailable" not in response.text
+        assert "GnuCash Bill Processor" in response.text
 
     def test_missing_db_renders_error_page(self):
         with patch("bill_processor.gnucash_db.check_db_health", return_value=MISSING):
