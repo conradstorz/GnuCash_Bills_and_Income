@@ -1412,6 +1412,50 @@ def get_cash_accounts() -> list:
         return []
 
 
+def check_db_health() -> dict:
+    """Check whether the GnuCash database is accessible.
+
+    Returns:
+        dict with keys:
+            status   : 'ok' | 'missing' | 'locked'
+            message  : human-readable description
+            path     : str — the configured GNUCASH_DB_PATH
+            hostname : str | None — lock holder hostname (locked only)
+            pid      : int | None — lock holder PID (locked only)
+    """
+    path = config.GNUCASH_DB_PATH
+
+    if not Path(path).exists():
+        return {
+            "status": "missing",
+            "message": "Database file not found at the configured path.",
+            "path": str(path),
+            "hostname": None,
+            "pid": None,
+        }
+
+    locked, hostname, pid = is_locked_by_others()
+    if locked:
+        return {
+            "status": "locked",
+            "message": (
+                f"Database is locked by {hostname} (PID {pid}). "
+                "Close GnuCash and click Refresh."
+            ),
+            "path": str(path),
+            "hostname": hostname,
+            "pid": pid,
+        }
+
+    return {
+        "status": "ok",
+        "message": "Database is accessible.",
+        "path": str(path),
+        "hostname": None,
+        "pid": None,
+    }
+
+
 def create_cash_entry(
     entry_date,
     line_items: list,
