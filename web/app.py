@@ -5,6 +5,8 @@ Serves a state-aware dashboard for managing vendor bills.
 import html
 import json
 import os
+import subprocess
+import sys
 import threading
 import time
 from datetime import date, timedelta
@@ -542,6 +544,35 @@ async def cash_submit(request: Request):
             success_msg += f" Deposit of ${float(deposit_amount_str):.2f} recorded."
 
     return _render_panel(success=success_msg)
+
+
+# ---------------------------------------------------------------------------
+# DB configuration routes
+# ---------------------------------------------------------------------------
+
+@app.get("/db/browse")
+async def db_browse():
+    """Open a native Windows file picker and return the selected path."""
+    try:
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import tkinter as tk; from tkinter import filedialog; "
+                "root = tk.Tk(); root.withdraw(); "
+                "root.wm_attributes('-topmost', 1); "
+                "path = filedialog.askopenfilename("
+                "    title='Select GnuCash database file',"
+                "    filetypes=[('GnuCash files', '*.gnucash'), ('All files', '*.*')]"
+                "); print(path)"
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        path = result.stdout.strip()
+    except Exception:
+        path = ""
+    return {"path": path}
 
 
 @app.post("/shutdown")

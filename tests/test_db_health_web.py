@@ -65,3 +65,31 @@ class TestGetDashboardHealthCheck:
         with patch("bill_processor.gnucash_db.check_db_health", return_value=MISSING):
             response = client.get("/")
         assert "Shut Down" in response.text
+
+
+class TestDbBrowse:
+    def test_returns_path_when_file_selected(self):
+        mock_result = MagicMock()
+        mock_result.stdout = "D:\\fake\\test.gnucash\n"
+        mock_result.returncode = 0
+        with patch("bill_processor.web.app.subprocess.run", return_value=mock_result):
+            response = client.get("/db/browse")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["path"] == "D:\\fake\\test.gnucash"
+
+    def test_returns_empty_path_when_cancelled(self):
+        mock_result = MagicMock()
+        mock_result.stdout = "\n"
+        mock_result.returncode = 0
+        with patch("bill_processor.web.app.subprocess.run", return_value=mock_result):
+            response = client.get("/db/browse")
+        assert response.status_code == 200
+        assert response.json()["path"] == ""
+
+    def test_returns_empty_path_on_subprocess_error(self):
+        with patch("bill_processor.web.app.subprocess.run",
+                   side_effect=Exception("subprocess failed")):
+            response = client.get("/db/browse")
+        assert response.status_code == 200
+        assert response.json()["path"] == ""
