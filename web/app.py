@@ -69,6 +69,13 @@ def get_status():
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     """Render the main dashboard."""
+    # --- DB health check (must be first) ---
+    health = gnucash_db.check_db_health()
+    if health["status"] != "ok":
+        return templates.TemplateResponse(
+            request, "db_unavailable.html", {"health": health}
+        )
+
     queue = queue_io.read_queue()
     sync = _get_sync_status()
     try:
