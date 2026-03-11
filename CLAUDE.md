@@ -28,6 +28,10 @@ python vendor_sync.py
 uv run uvicorn bill_processor.web.app:app --reload --port 7432
 # Or double-click GnuCash Bills.bat (desktop launcher — opens browser automatically)
 # Access at http://localhost:7432
+
+# First-time setup (after git clone)
+uv run python install.py
+# Searches Documents for .gnucash files, updates config.py, generates launcher
 ```
 
 ### Testing
