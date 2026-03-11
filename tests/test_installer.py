@@ -256,17 +256,16 @@ class TestCopyToDesktop:
         assert result is False
         assert not (desktop / "GnuCash Bills.bat").exists()
 
-    def test_returns_false_when_desktop_missing(self, tmp_path, capsys):
+    def test_returns_false_when_desktop_missing(self, tmp_path, caplog):
         launcher = tmp_path / "GnuCash Bills.bat"
         launcher.write_text("@echo off\n", encoding="utf-8")
         # No Desktop subfolder created
         with patch.object(install.Path, "home", return_value=tmp_path):
             result = install.copy_to_desktop(launcher)
         assert result is False
-        captured = capsys.readouterr()
-        assert str(launcher) in captured.out
+        assert str(launcher) in caplog.text
 
-    def test_returns_false_on_copy_error(self, tmp_path, capsys):
+    def test_returns_false_on_copy_error(self, tmp_path, caplog):
         launcher = tmp_path / "GnuCash Bills.bat"
         launcher.write_text("@echo off\n", encoding="utf-8")
         desktop = tmp_path / "Desktop"
@@ -276,7 +275,7 @@ class TestCopyToDesktop:
              patch("shutil.copy2", side_effect=OSError("Permission denied")):
             result = install.copy_to_desktop(launcher)
         assert result is False
-        assert "Permission denied" in capsys.readouterr().out
+        assert "Permission denied" in caplog.text
 
     def test_prompts_before_overwrite(self, tmp_path, capsys):
         launcher = tmp_path / "GnuCash Bills.bat"
@@ -323,11 +322,10 @@ class TestMain:
         assert str(tmp_path) in text
         assert str(fake_db) in text
 
-    def test_exits_gracefully_when_no_db_selected(self, tmp_path, capsys):
+    def test_exits_gracefully_when_no_db_selected(self, tmp_path, caplog):
         cfg = self._make_config(tmp_path)
         with patch.object(install, "search_for_gnucash", return_value=[]), \
              patch.object(install, "pick_gnucash_file", return_value=None), \
              patch.object(install.Path, "resolve", return_value=tmp_path):
             install.main(config_path=cfg, project_root=tmp_path)
-        captured = capsys.readouterr()
-        assert "No database selected" in captured.out or "Exiting" in captured.out
+        assert "No database selected" in caplog.text or "Exiting" in caplog.text

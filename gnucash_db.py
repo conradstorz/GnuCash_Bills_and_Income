@@ -1396,20 +1396,18 @@ def get_samuse_account_guid() -> str:
 
 
 def get_cash_accounts() -> list:
-    """Load the income/cash account list from data/cash_accounts.json.
+    """Get all non-placeholder INCOME and ASSET accounts from the GnuCash DB.
 
-    Returns list of dicts with 'name' and 'guid' keys.
-    Returns empty list if file does not exist or is malformed.
+    Returns list of dicts with 'name' and 'guid' keys, sorted by name.
     """
-    import json
-    from bill_processor.config import CASH_ACCOUNTS_PATH
-    if not CASH_ACCOUNTS_PATH.exists():
-        return []
-    try:
-        data = json.loads(CASH_ACCOUNTS_PATH.read_text(encoding="utf-8"))
-        return data.get("accounts", [])
-    except (json.JSONDecodeError, OSError):
-        return []
+    with get_connection() as conn:
+        cursor = conn.execute("""
+            SELECT guid, name FROM accounts
+            WHERE account_type IN ('INCOME', 'ASSET')
+            AND placeholder = 0
+            ORDER BY name
+        """)
+        return [dict(row) for row in cursor]
 
 
 def check_db_health() -> dict:

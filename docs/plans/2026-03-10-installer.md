@@ -6,7 +6,9 @@
 
 **Architecture:** Single standalone script at the project root with six pure/testable helper functions and a `main()` that wires them together. All interactive I/O is isolated in `pick_gnucash_file()`, `copy_to_desktop()`, and `main()` — making all logic functions unit-testable by mocking `input()` and `subprocess.run`. Uses same regex-lambda pattern as `POST /db/set-path` for config edits.
 
-**Tech Stack:** Python 3.11 stdlib only — `pathlib`, `re`, `shutil`, `os`, `sys`, `subprocess`, `datetime`. pytest for tests.
+**Tech Stack:** Python 3.11 stdlib only — `pathlib`, `re`, `shutil`, `os`, `sys`, `subprocess`, `datetime`, `logging`. pytest for tests.
+
+**Logging rule:** Use stdlib `logging` (not loguru, not `bill_processor.logging_setup`). `install.py` must be runnable standalone before the venv is fully configured, so it must not import any third-party package or anything from `bill_processor`. Configure a single `StreamHandler` to stdout so pytest `capsys` can capture output normally.
 
 ---
 
