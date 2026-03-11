@@ -21,8 +21,14 @@ tests/htmlcov/
 htmlcov/
 .coverage
 
-# GnuCash schema cache (auto-generated)
-gnucash_schema.json
+# Runtime data files — contain real vendor/client names, addresses, GUIDs
+# These are personal/business data and must not be committed.
+# See data/*.json format in CLAUDE.md and docs/plans/ for structure.
+data/vendor_database.json
+data/clients.json
+data/cash_accounts.json
+data/bills_to_process.txt
+data/gnucash_schema.json
 
 # Columbo snapshots (working files, not source)
 snapshot_before.json
