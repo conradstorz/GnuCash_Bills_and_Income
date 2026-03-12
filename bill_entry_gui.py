@@ -34,7 +34,7 @@ class VendorSyncProgressDialog:
     def __init__(self, parent):
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Vendor Sync Progress")
-        self.dialog.geometry("600x400")
+        self.dialog.geometry(f"{config.DIALOG_WINDOW_WIDTH}x{config.DIALOG_WINDOW_HEIGHT}")
         self.dialog.transient(parent)
         self.dialog.grab_set()
         
@@ -87,7 +87,7 @@ class AccountSelectionDialog:
     def __init__(self, parent):
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Select Accounts for Bill Processing")
-        self.dialog.geometry("600x400")
+        self.dialog.geometry(f"{config.DIALOG_WINDOW_WIDTH}x{config.DIALOG_WINDOW_HEIGHT}")
         self.dialog.transient(parent)
         self.dialog.grab_set()
         
@@ -116,7 +116,7 @@ class AccountSelectionDialog:
         ttk.Label(exp_frame, text="Select an expense account (non-placeholder):").pack(anchor="w", pady=(0, 5))
         
         self.expense_var = tk.StringVar()
-        self.expense_combo = ttk.Combobox(exp_frame, textvariable=self.expense_var, state="readonly", width=70)
+        self.expense_combo = ttk.Combobox(exp_frame, textvariable=self.expense_var, state="readonly", width=config.COMBOBOX_WIDTH)
         self.expense_combo.pack(fill="x")
         
         # Checking Account Section
@@ -126,7 +126,7 @@ class AccountSelectionDialog:
         ttk.Label(check_frame, text="Select a checking account (non-placeholder):").pack(anchor="w", pady=(0, 5))
         
         self.checking_var = tk.StringVar()
-        self.checking_combo = ttk.Combobox(check_frame, textvariable=self.checking_var, state="readonly", width=70)
+        self.checking_combo = ttk.Combobox(check_frame, textvariable=self.checking_var, state="readonly", width=config.COMBOBOX_WIDTH)
         self.checking_combo.pack(fill="x")
         
         # Status message
@@ -210,7 +210,7 @@ class SimpleBillEntryGUI:
         
         self.root = root
         self.root.title("Simple Bill Entry - GnuCash Bills")
-        self.root.geometry("800x700")
+        self.root.geometry(f"{config.BILL_ENTRY_WINDOW_WIDTH}x{config.BILL_ENTRY_WINDOW_HEIGHT}")
         self.root.minsize(600, 500)
         
         # Status
@@ -390,7 +390,7 @@ class SimpleBillEntryGUI:
         
         # Vendor name
         ttk.Label(entry_frame, text="Vendor Name:").grid(row=0, column=0, sticky="w", pady=5)
-        self.vendor_entry = ttk.Entry(entry_frame, width=50, font=('TkDefaultFont', 10))
+        self.vendor_entry = ttk.Entry(entry_frame, width=config.ENTRY_FIELD_WIDE_WIDTH, font=('TkDefaultFont', 10))
         self.vendor_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
         self.vendor_entry.focus()
         
@@ -402,12 +402,12 @@ class SimpleBillEntryGUI:
         
         # Amount
         ttk.Label(entry_frame, text="Amount:").grid(row=1, column=0, sticky="w", pady=5)
-        self.amount_entry = ttk.Entry(entry_frame, width=20)
+        self.amount_entry = ttk.Entry(entry_frame, width=config.ENTRY_FIELD_MEDIUM_WIDTH)
         self.amount_entry.grid(row=1, column=1, sticky="w", padx=(10, 0), pady=5)
         
         # Memo
         ttk.Label(entry_frame, text="Memo:").grid(row=2, column=0, sticky="w", pady=5)
-        self.memo_entry = ttk.Entry(entry_frame, width=50)
+        self.memo_entry = ttk.Entry(entry_frame, width=config.ENTRY_FIELD_WIDE_WIDTH)
         self.memo_entry.grid(row=2, column=1, sticky="ew", padx=(10, 0), pady=5)
         
         # Date
@@ -415,11 +415,11 @@ class SimpleBillEntryGUI:
         date_frame = ttk.Frame(entry_frame)
         date_frame.grid(row=3, column=1, sticky="w", padx=(10, 0), pady=5)
         
-        self.date_entry = ttk.Entry(date_frame, width=15)
+        self.date_entry = ttk.Entry(date_frame, width=config.ENTRY_FIELD_NARROW_WIDTH)
         self.date_entry.pack(side="left")
         self.date_entry.insert(0, date.today().strftime("%Y-%m-%d"))
         
-        ttk.Button(date_frame, text="Today", command=self._set_today, width=8).pack(side="left", padx=(5, 0))
+        ttk.Button(date_frame, text="Today", command=self._set_today, width=config.BUTTON_NARROW_WIDTH).pack(side="left", padx=(5, 0))
         
         # Buttons
         btn_frame = ttk.Frame(entry_frame)
@@ -455,10 +455,10 @@ class SimpleBillEntryGUI:
         self.bills_tree.heading("memo", text="Memo")
         self.bills_tree.heading("date", text="Date")
         
-        self.bills_tree.column("vendor", width=200)
-        self.bills_tree.column("amount", width=80, anchor="e")
-        self.bills_tree.column("memo", width=250)
-        self.bills_tree.column("date", width=80, anchor="center")
+        self.bills_tree.column("vendor", width=config.TREEVIEW_VENDOR_COLUMN_WIDTH)
+        self.bills_tree.column("amount", width=config.TREEVIEW_AMOUNT_COLUMN_WIDTH, anchor="e")
+        self.bills_tree.column("memo", width=config.TREEVIEW_MEMO_COLUMN_WIDTH)
+        self.bills_tree.column("date", width=config.TREEVIEW_DATE_COLUMN_WIDTH, anchor="center")
         
         self.bills_tree.grid(row=0, column=0, sticky="nsew")
         
