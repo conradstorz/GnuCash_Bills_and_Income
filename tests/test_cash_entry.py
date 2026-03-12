@@ -4,7 +4,7 @@ Tests for cash-on-hand entry functions in gnucash_db.py.
 import pytest
 import sqlite3
 from datetime import date, timedelta
-from bill_processor import gnucash_db
+from bill_processor import gnucash_db, config
 
 
 class TestGetSamuseAccountGuid:
@@ -23,7 +23,7 @@ class TestGetSamuseAccountGuid:
         assert row is not None
 
     def test_raises_if_account_missing(self, db_connection, monkeypatch):
-        monkeypatch.setattr(gnucash_db, "SAMUSE_ACCOUNT_NAME", "NONEXISTENT_XYZ")
+        monkeypatch.setattr(config, "SAMUSE_ACCOUNT_NAME", "NONEXISTENT_XYZ")
         gnucash_db._samuse_guid_cache = None
         with pytest.raises(ValueError, match="SAMUSE|NONEXISTENT"):
             gnucash_db.get_samuse_account_guid()

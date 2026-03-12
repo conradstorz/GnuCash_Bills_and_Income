@@ -479,7 +479,7 @@ def get_samuse_account_guid() -> str:
     if row is None:
         raise ValueError(
             f"SAMUSE Cash-on-hand account '{SAMUSE_ACCOUNT_NAME}' not found in database. "
-            "Verify the account name in config or gnucash_db.SAMUSE_ACCOUNT_NAME."
+            "Verify the account name in config.SAMUSE_ACCOUNT_NAME."
         )
 
     _samuse_guid_cache = row["guid"]

@@ -1369,7 +1369,6 @@ def get_usd_guid() -> str:
 # CASH-ON-HAND OPERATIONS
 # =============================================================================
 
-SAMUSE_ACCOUNT_NAME = "SAMUSE Cash-on-hand"
 _samuse_guid_cache = None
 
 
@@ -1382,13 +1381,13 @@ def get_samuse_account_guid() -> str:
     with get_connection(readonly=True) as conn:
         row = conn.execute(
             "SELECT guid FROM accounts WHERE name = ? AND placeholder = 0",
-            (SAMUSE_ACCOUNT_NAME,)
+            (config.SAMUSE_ACCOUNT_NAME,)
         ).fetchone()
 
     if row is None:
         raise ValueError(
-            f"Account '{SAMUSE_ACCOUNT_NAME}' not found in database. "
-            "Verify the account name in gnucash_db.SAMUSE_ACCOUNT_NAME."
+            f"Account '{config.SAMUSE_ACCOUNT_NAME}' not found in database. "
+            "Verify the account name in config.SAMUSE_ACCOUNT_NAME."
         )
 
     _samuse_guid_cache = row["guid"] if hasattr(row, "keys") else row[0]
@@ -1415,7 +1414,7 @@ def check_db_health() -> dict:
 
     Returns:
         dict with keys:
-            status   : 'ok' | 'missing' | 'locked'
+            status   : 'ok' | 'missing' | 'locked' | 'account_missing'
             message  : human-readable description
             path     : str — the configured GNUCASH_DB_PATH
             hostname : str | None — lock holder hostname (locked only)
@@ -1443,6 +1442,23 @@ def check_db_health() -> dict:
             "path": str(path),
             "hostname": hostname,
             "pid": pid,
+        }
+
+    with get_connection(readonly=True) as conn:
+        row = conn.execute(
+            "SELECT guid FROM accounts WHERE name = ? AND placeholder = 0",
+            (config.SAMUSE_ACCOUNT_NAME,)
+        ).fetchone()
+    if row is None:
+        return {
+            "status": "account_missing",
+            "message": (
+                f"Required account '{config.SAMUSE_ACCOUNT_NAME}' not found in database. "
+                "Create this account in GnuCash or update SAMUSE_ACCOUNT_NAME in config.py."
+            ),
+            "path": str(path),
+            "hostname": None,
+            "pid": None,
         }
 
     return {

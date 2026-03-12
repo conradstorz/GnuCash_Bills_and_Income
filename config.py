@@ -79,6 +79,9 @@ DEFAULT_MEMO = "no memo"
 # Currency
 DEFAULT_CURRENCY = "USD"
 
+# Cash-on-hand account name
+SAMUSE_ACCOUNT_NAME = "SAMUSE Cash-on-hand"
+
 # =============================================================================
 # ADDRESS LOOKUP API SETTINGS
 # =============================================================================
