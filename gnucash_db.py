@@ -418,7 +418,7 @@ def _get_lock_hostname() -> str:
     Uses 'BillProcessor@hostname' format to distinguish from GnuCash locks.
     """
     import socket
-    return f"BillProcessor@{socket.gethostname()}"
+    return f"{config.LOCK_HOSTNAME_PREFIX}@{socket.gethostname()}"
 
 
 def clean_stale_lock() -> bool:
@@ -451,7 +451,7 @@ def clean_stale_lock() -> bool:
     
     # Check if this lock could be from a different machine
     # BillProcessor@ format explicitly includes machine name, others might be local
-    if hostname and hostname.startswith('BillProcessor@'):
+    if hostname and hostname.startswith(f'{config.LOCK_HOSTNAME_PREFIX}@'):
         # Extract machine name from BillProcessor@machinename format
         lock_machine = hostname.split('@', 1)[1] if '@' in hostname else ''
         if lock_machine and lock_machine != local_machine:
@@ -800,9 +800,9 @@ def create_vendor(name: str, addr_name: str = None, addr_addr1: str = None,
         'id': vendor_id, 
         'name': name,
         'currency': usd_guid,
-        'active': 1,
+        'active': config.DEFAULT_VENDOR_ACTIVE,
         'notes': '',
-        'tax_override': 0,
+        'tax_override': config.DEFAULT_VENDOR_TAX_OVERRIDE,
         'addr_name': addr_name or '',
         'addr_addr1': addr_addr1 or '',
         'addr_addr2': addr_addr2 or '',
@@ -978,9 +978,9 @@ def find_expense_accounts_like(pattern: str) -> List[Dict]:
         cursor = conn.execute("""
             SELECT guid, name, account_type, parent_guid
             FROM accounts 
-            WHERE name LIKE ? AND account_type = 'EXPENSE'
+            WHERE name LIKE ? AND account_type = ?
             ORDER BY name
-        """, (f"{pattern}%",))
+        """, (f"{pattern}%", config.ACCOUNT_TYPE_EXPENSE))
         
         return [dict(row) for row in cursor]
 
@@ -988,7 +988,7 @@ def find_expense_accounts_like(pattern: str) -> List[Dict]:
 def _get_root_account_guid() -> Optional[str]:
     """Get the ROOT account GUID."""
     with get_connection() as conn:
-        cursor = conn.execute("SELECT guid FROM accounts WHERE account_type = 'ROOT' LIMIT 1")
+        cursor = conn.execute("SELECT guid FROM accounts WHERE account_type = ? LIMIT 1", (config.ACCOUNT_TYPE_ROOT,))
         row = cursor.fetchone()
         return row['guid'] if row else None
 
@@ -1046,12 +1046,12 @@ def fix_orphaned_expense_accounts() -> Dict[str, str]:
             SELECT a.guid, a.name, p.name as parent_name
             FROM accounts a
             JOIN accounts p ON a.parent_guid = p.guid
-            WHERE a.account_type = 'EXPENSE'
-            AND a.placeholder = 0
-            AND p.placeholder = 1
-            AND p.name = 'Expenses root'
+            WHERE a.account_type = ?
+            AND a.placeholder = ?
+            AND p.placeholder = ?
+            AND p.name = ?
             AND a.name LIKE 'cmsnpd_%'
-        """)
+        """, (config.ACCOUNT_TYPE_EXPENSE, config.PLACEHOLDER_FALSE, config.PLACEHOLDER_TRUE, config.DEFAULT_EXPENSE_PARENT))
         
         orphans = cursor.fetchall()
         
@@ -1105,9 +1105,9 @@ def validate_account_hierarchy(account_guid: str) -> Dict:
         
         result['info']['name'] = account['name']
         result['info']['type'] = account['account_type']
-        result['info']['is_placeholder'] = account['placeholder'] == 1
+        result['info']['is_placeholder'] = account['placeholder'] == config.PLACEHOLDER_TRUE
         
-        if account['placeholder'] == 1:
+        if account['placeholder'] == config.PLACEHOLDER_TRUE:
             result['valid'] = False
             result['issues'].append(f"Account '{account['name']}' is a placeholder - cannot accept transactions")
         
@@ -1126,7 +1126,7 @@ def validate_account_hierarchy(account_guid: str) -> Dict:
             if not parent:
                 break
             
-            if parent['account_type'] == 'ROOT':
+            if parent['account_type'] == config.ACCOUNT_TYPE_ROOT:
                 break
                 
             depth += 1
@@ -1149,9 +1149,9 @@ def get_ap_account_guid() -> Optional[str]:
         # First try: find by account_type = PAYABLE (the correct way)
         cursor = conn.execute("""
             SELECT guid, name FROM accounts 
-            WHERE account_type = 'PAYABLE'
+            WHERE account_type = ?
             LIMIT 1
-        """)
+        """, (config.ACCOUNT_TYPE_PAYABLE,))
         row = cursor.fetchone()
         if row:
             logger.debug(f"Found A/P account by type: {row['name']}")
@@ -1160,13 +1160,13 @@ def get_ap_account_guid() -> Optional[str]:
         # Fallback: search by name containing 'payable'
         cursor = conn.execute("""
             SELECT guid, name, account_type FROM accounts 
-            WHERE LOWER(name) LIKE '%payable%'
+            WHERE LOWER(name) LIKE ?
             ORDER BY 
-                CASE WHEN account_type = 'LIABILITY' THEN 1
-                     WHEN account_type = 'ASSET' THEN 2
+                CASE WHEN account_type = ? THEN 1
+                     WHEN account_type = ? THEN 2
                      ELSE 3 END
             LIMIT 1
-        """)
+        """, (f"%{config.PAYABLE_ACCOUNT_NAME_PATTERN}%", config.ACCOUNT_TYPE_LIABILITY, config.ACCOUNT_TYPE_ASSET))
         row = cursor.fetchone()
         if row:
             logger.warning(f"No PAYABLE type account found. Using '{row['name']}' ({row['account_type']}) as fallback")
@@ -1207,8 +1207,8 @@ def validate_gnucash_setup() -> Dict[str, any]:
         
         # Check 2: Accounts Payable account (CRITICAL)
         cursor = conn.execute("""
-            SELECT guid, name FROM accounts WHERE account_type = 'PAYABLE'
-        """)
+            SELECT guid, name FROM accounts WHERE account_type = ?
+        """, (config.ACCOUNT_TYPE_PAYABLE,))
         row = cursor.fetchone()
         if row:
             result['info']['ap_account'] = row['name']
@@ -1217,8 +1217,8 @@ def validate_gnucash_setup() -> Dict[str, any]:
             # Check if there's one with a similar name but wrong type
             cursor = conn.execute("""
                 SELECT name, account_type FROM accounts 
-                WHERE LOWER(name) LIKE '%payable%'
-            """)
+                WHERE LOWER(name) LIKE ?
+            """, (f"%{config.PAYABLE_ACCOUNT_NAME_PATTERN}%",))
             similar = cursor.fetchone()
             if similar:
                 result['errors'].append(
@@ -1237,9 +1237,9 @@ def validate_gnucash_setup() -> Dict[str, any]:
         # Check 3: Expense parent account
         cursor = conn.execute("""
             SELECT guid, name FROM accounts 
-            WHERE account_type = 'EXPENSE' 
-            AND parent_guid IN (SELECT guid FROM accounts WHERE account_type = 'ROOT')
-        """)
+            WHERE account_type = ? 
+            AND parent_guid IN (SELECT guid FROM accounts WHERE account_type = ?)
+        """, (config.ACCOUNT_TYPE_EXPENSE, config.ACCOUNT_TYPE_ROOT))
         row = cursor.fetchone()
         if row:
             result['info']['expense_parent'] = row['name']
@@ -1253,8 +1253,8 @@ def validate_gnucash_setup() -> Dict[str, any]:
         
         # Check 4: Count existing expense accounts (informational)
         cursor = conn.execute("""
-            SELECT COUNT(*) as cnt FROM accounts WHERE account_type = 'EXPENSE'
-        """)
+            SELECT COUNT(*) as cnt FROM accounts WHERE account_type = ?
+        """, (config.ACCOUNT_TYPE_EXPENSE,))
         result['info']['expense_account_count'] = cursor.fetchone()['cnt']
         
         # Check 5: Count vendors
@@ -1279,10 +1279,10 @@ def get_liabilities_parent_guid() -> Optional[str]:
         # Find top-level LIABILITY account (parent is ROOT)
         cursor = conn.execute("""
             SELECT a.guid, a.name FROM accounts a
-            WHERE a.account_type = 'LIABILITY' 
-            AND a.parent_guid IN (SELECT guid FROM accounts WHERE account_type = 'ROOT')
+            WHERE a.account_type = ? 
+            AND a.parent_guid IN (SELECT guid FROM accounts WHERE account_type = ?)
             LIMIT 1
-        """)
+        """, (config.ACCOUNT_TYPE_LIABILITY, config.ACCOUNT_TYPE_ROOT))
         row = cursor.fetchone()
         if row:
             return row['guid']
@@ -1290,10 +1290,10 @@ def get_liabilities_parent_guid() -> Optional[str]:
         # Fallback: any LIABILITY account with 'root' or 'liabilities' in name
         cursor = conn.execute("""
             SELECT guid, name FROM accounts 
-            WHERE account_type = 'LIABILITY'
+            WHERE account_type = ?
             AND (LOWER(name) LIKE '%root%' OR LOWER(name) = 'liabilities')
             LIMIT 1
-        """)
+        """, (config.ACCOUNT_TYPE_LIABILITY,))
         row = cursor.fetchone()
         if row:
             return row['guid']
@@ -1324,15 +1324,15 @@ def create_ap_account(name: str = "Accounts Payable", verify: bool = True) -> st
             INSERT INTO accounts (
                 guid, name, account_type, commodity_guid, commodity_scu, 
                 non_std_scu, parent_guid, hidden, placeholder
-            ) VALUES (?, ?, 'PAYABLE', ?, 100, 0, ?, 0, 0)
-        """, (account_guid, name, usd_guid, parent_guid))
+            ) VALUES (?, ?, ?, ?, 100, 0, ?, 0, 0)
+        """, (account_guid, name, config.ACCOUNT_TYPE_PAYABLE, usd_guid, parent_guid))
         conn.commit()
     
     logger.info(f"Created A/P account: {name} (GUID: {account_guid})")
     
     # POST-WRITE VERIFICATION
     if verify:
-        verify_account_created(account_guid, name, 'PAYABLE')
+        verify_account_created(account_guid, name, config.ACCOUNT_TYPE_PAYABLE)
     
     return account_guid
 
@@ -1380,8 +1380,8 @@ def get_samuse_account_guid() -> str:
 
     with get_connection(readonly=True) as conn:
         row = conn.execute(
-            "SELECT guid FROM accounts WHERE name = ? AND placeholder = 0",
-            (config.SAMUSE_ACCOUNT_NAME,)
+            "SELECT guid FROM accounts WHERE name = ? AND placeholder = ?",
+            (config.SAMUSE_ACCOUNT_NAME, config.PLACEHOLDER_FALSE)
         ).fetchone()
 
     if row is None:
@@ -1402,10 +1402,10 @@ def get_cash_accounts() -> list:
     with get_connection() as conn:
         cursor = conn.execute("""
             SELECT guid, name FROM accounts
-            WHERE account_type IN ('INCOME', 'ASSET')
-            AND placeholder = 0
+            WHERE account_type IN (?, ?)
+            AND placeholder = ?
             ORDER BY name
-        """)
+        """, (config.ACCOUNT_TYPE_INCOME, config.ACCOUNT_TYPE_ASSET, config.PLACEHOLDER_FALSE))
         return [dict(row) for row in cursor]
 
 
@@ -1446,8 +1446,8 @@ def check_db_health() -> dict:
 
     with get_connection(readonly=True) as conn:
         row = conn.execute(
-            "SELECT guid FROM accounts WHERE name = ? AND placeholder = 0",
-            (config.SAMUSE_ACCOUNT_NAME,)
+            "SELECT guid FROM accounts WHERE name = ? AND placeholder = ?",
+            (config.SAMUSE_ACCOUNT_NAME, config.PLACEHOLDER_FALSE)
         ).fetchone()
     if row is None:
         return {
@@ -1648,9 +1648,9 @@ def get_checking_accounts() -> List[Dict]:
     with get_connection() as conn:
         cursor = conn.execute("""
             SELECT guid, name, description FROM accounts 
-            WHERE account_type = 'BANK' AND placeholder = 0
+            WHERE account_type = ? AND placeholder = ?
             ORDER BY name
-        """)
+        """, (config.ACCOUNT_TYPE_BANK, config.PLACEHOLDER_FALSE))
         return [dict(row) for row in cursor]
 
 
@@ -1663,9 +1663,9 @@ def get_expense_accounts() -> List[Dict]:
     with get_connection() as conn:
         cursor = conn.execute("""
             SELECT guid, name, description FROM accounts 
-            WHERE account_type = 'EXPENSE' AND placeholder = 0
+            WHERE account_type = ? AND placeholder = ?
             ORDER BY name
-        """)
+        """, (config.ACCOUNT_TYPE_EXPENSE, config.PLACEHOLDER_FALSE))
         return [dict(row) for row in cursor]
 
 
