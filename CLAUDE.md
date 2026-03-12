@@ -80,17 +80,44 @@ python columbo.py path/to/book.gnucash
 
 ### Key Supporting Modules
 
-- **`config.py`** — **CENTRALIZED CONFIGURATION** for all paths, settings, and constants. Start here for environment setup. Contains 8 organized sections:
-  - **GnuCash Settings:** Database path, business rules (vendor defaults, expense parent, A/P account pattern), lock hostname prefix, SAMUSE account name
-  - **GnuCash Schema Constants:** Account types (ROOT, EXPENSE, PAYABLE, BANK, LIABILITY, ASSET, INCOME), placeholder flags, active/inactive flags
-  - **Address Lookup API Settings:** Timeouts, rate limits, OSM URL, result limits, business name suffixes
-  - **Fuzzy Matching Settings:** Autocomplete thresholds (prefix=100, contains=50, min=70), max results (autocomplete=5, web vendor search=10, client search=10)
-  - **Date Parsing:** Alternative date format patterns for flexible input parsing
-  - **Distance Calculation:** Earth radius for Haversine formula
-  - **UI Settings:** Window dimensions (bill entry 800x700, vendor manager 1000x650, dialogs 600x400), widget widths (combobox 70, entry fields 50/20/15), treeview columns (vendor 200, amount 80, memo 250, date 80), autocomplete appearance
-  - **Web Server:** Shutdown delay (1.0s) to allow final response
-  - **⚠️ Important:** All modules import from `config`, not hardcoded values. To change behavior (timeouts, thresholds, UI sizes), edit `config.py`.
-  - `PROJECT_ROOT` points to the repo root. Paths reference `D:\Users\Conrad\Documents\GnuCash\` for real data.
+- **Configuration Architecture — Hybrid System (config.py + settings_manager.py)**
+  
+  **`config.py`** — **SYSTEM CONSTANTS** (immutable, developer-modified only):
+  - GnuCash Schema Constants: Account types (ROOT, EXPENSE, PAYABLE, BANK, LIABILITY, ASSET, INCOME), placeholder flags, active/inactive flags
+  - ID Format Patterns: VENDOR_ID_FORMAT, BILL_ID_FORMAT
+  - System-Level: Earth radius (Haversine formula), date format patterns, business name suffixes, OSM endpoints
+  - Feature Domains: 5 organized sections (Application Setup, Bill & Vendor Management, Address Lookup Services, User Interface, System Constants)
+  - `PROJECT_ROOT` auto-detected via `Path(__file__).parent.resolve()` for portability
+  
+  **`settings_manager.py`** — **USER SETTINGS** (runtime-modifiable via GUI/web/API):
+  - Persists to `data/user_settings.json` (gitignored, contains PII)
+  - SettingsManager class with property accessors and convenience methods
+  - Automatically loads from file or falls back to config.py defaults
+  - Auto-saves on any change (`set()`, `update()`, property setters)
+  - User-Configurable Settings:
+    - Database & Paths: `gnucash_db_path` (user can switch databases)
+    - Locality: `locality_city`, `locality_state`, `home_latitude`, `home_longitude`, `search_radius_miles`
+    - GnuCash Accounts: `accounts_payable_path`, `default_expense_parent`, `cash_on_hand_account_name`
+    - Defaults: `default_memo`, `default_currency`
+    - Fuzzy Matching: `fuzzy_match_threshold`, `fuzzy_ambiguous_threshold`, autocomplete thresholds
+    - Address Lookup: API timeouts, rate limits, search result limits
+    - UI Dimensions: All window sizes, widget widths, treeview columns, autocomplete appearance
+    - Display: `terminal_width`, `log_level`, server shutdown delay
+  
+  **Usage:**
+  ```python
+  from settings_manager import settings  # Runtime-configurable
+  import config                          # System constants
+  
+  settings.gnucash_db_path = Path('/new/db.gnucash')
+  settings.update_locality('Cincinnati', 'OH', 'US', 39.1031, -84.5120)
+  settings.fuzzy_match_threshold = 85
+  
+  account_type = config.ACCOUNT_TYPE_EXPENSE  # Immutable constant
+  ```
+  
+  **Migration Path:** Existing code using `from config import SETTING` still works during transition period via `__getattr__` fallback.
+
 - **`schema_discovery.py`** — Handles GnuCash version differences by detecting column names at runtime; caches results in `gnucash_schema.json`.
 - **`logging_setup.py`** — loguru-based logging; console=INFO, file=DEBUG at `logs/bill_processor.log`.
 
