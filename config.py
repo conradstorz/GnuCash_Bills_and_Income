@@ -26,10 +26,13 @@ load_dotenv()
 # =============================================================================
 
 # Project root directory
-PROJECT_ROOT = Path(r"D:\Users\Conrad\Documents\programming\GnuCash_bills_and_collections")
+# Auto-detected from location of this config.py file
+PROJECT_ROOT = Path(__file__).parent.resolve()
 
 # GnuCash database file (SQLite format)
 # Using local test database copy for development
+# Note: Path.home() doesn't work here because Documents folder is on D: drive
+# Customize this path for your environment
 GNUCASH_DB_PATH = Path(r"D:\Users\Conrad\Documents\GnuCash\gnuCash414\CFSIV_Sqlite3_database.gnucash")
 
 # Vendor database JSON file
