@@ -24,7 +24,7 @@ class AddressLookupGUI:
     def __init__(self, root: tk.Tk, vendor_name: Optional[str] = None):
         self.root = root
         self.root.title("Address Lookup Tool")
-        self.root.geometry("1000x650")
+        self.root.geometry(f"{config.VENDOR_MANAGER_WINDOW_WIDTH}x{config.VENDOR_MANAGER_WINDOW_HEIGHT}")
         
         self.vendor_manager = VendorManager()
         self.vendor_key = None
@@ -239,7 +239,7 @@ class AddressLookupGUI:
         # Removed auto-matching trace - only triggers on field changes for auto-save
         
         ttk.Label(name_frame, text="Name:").grid(row=0, column=0, sticky="w", padx=(0, 5))
-        self.name_entry = ttk.Entry(name_frame, textvariable=self.vendor_name_var, width=40, state="readonly")
+        self.name_entry = ttk.Entry(name_frame, textvariable=self.vendor_name_var, width=config.ENTRY_FIELD_WIDE_WIDTH, state="readonly")
         self.name_entry.grid(row=0, column=1, sticky="ew")
         ttk.Button(name_frame, text="Search Web", command=self._search_web).grid(row=0, column=2, padx=(5, 0))
         ttk.Button(name_frame, text="New Vendor", command=self._new_vendor).grid(row=0, column=3, padx=(5, 0))
@@ -278,7 +278,7 @@ class AddressLookupGUI:
         
         for idx, (label, var) in enumerate(fields):
             ttk.Label(addr_frame, text=label).grid(row=idx, column=0, sticky="w", padx=(0, 5), pady=2)
-            ttk.Entry(addr_frame, textvariable=var, width=60).grid(row=idx, column=1, sticky="ew", pady=2)
+            ttk.Entry(addr_frame, textvariable=var, width=config.ENTRY_FIELD_WIDE_WIDTH).grid(row=idx, column=1, sticky="ew", pady=2)
         
         addr_frame.columnconfigure(1, weight=1)
         
