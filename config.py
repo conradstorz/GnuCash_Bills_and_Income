@@ -52,8 +52,8 @@ SEARCH_RADIUS_MILES = 30
 # Used for distance calculations and "pick closest" logic
 HOME_LATITUDE = 38.2527
 HOME_LONGITUDE = -85.7585
-CENTER_LAT = HOME_LATITUDE  # Alias for address_lookup
-CENTER_LON = HOME_LONGITUDE  # Alias for address_lookup
+LOCALITY_CENTER_LAT = HOME_LATITUDE  # Center point for address search radius
+LOCALITY_CENTER_LON = HOME_LONGITUDE  # Center point for address search radius
 
 # Default locality string for searches
 DEFAULT_LOCALITY = f"{LOCALITY_CITY}, {LOCALITY_STATE}"

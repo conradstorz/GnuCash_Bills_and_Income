@@ -454,8 +454,8 @@ class TestMockedAPILookups:
     
     @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
     @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Springfield, IL')
-    @patch('bill_processor.address_lookup.config.CENTER_LAT', None)
-    @patch('bill_processor.address_lookup.config.CENTER_LON', None)
+    @patch('bill_processor.address_lookup.config.LOCALITY_CENTER_LAT', None)
+    @patch('bill_processor.address_lookup.config.LOCALITY_CENTER_LON', None)
     @patch('bill_processor.address_lookup.requests.post')
     def test_google_places_lookup_success(self, mock_post):
         """Test successful Google Places lookup"""
@@ -513,8 +513,8 @@ class TestMockedAPILookups:
     
     @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
     @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
-    @patch('bill_processor.address_lookup.config.CENTER_LAT', None)
-    @patch('bill_processor.address_lookup.config.CENTER_LON', None)
+    @patch('bill_processor.address_lookup.config.LOCALITY_CENTER_LAT', None)
+    @patch('bill_processor.address_lookup.config.LOCALITY_CENTER_LON', None)
     @patch('bill_processor.address_lookup.requests.post')
     def test_google_places_return_all_true(self, mock_post):
         """Test Google Places with return_all=True returns list of all results"""
@@ -591,8 +591,8 @@ class TestMockedAPILookups:
     
     @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
     @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
-    @patch('bill_processor.address_lookup.config.CENTER_LAT', None)
-    @patch('bill_processor.address_lookup.config.CENTER_LON', None)
+    @patch('bill_processor.address_lookup.config.LOCALITY_CENTER_LAT', None)
+    @patch('bill_processor.address_lookup.config.LOCALITY_CENTER_LON', None)
     @patch('bill_processor.address_lookup.requests.post')
     def test_google_places_return_all_false_returns_single(self, mock_post):
         """Test Google Places with return_all=False returns only best result"""
@@ -633,8 +633,8 @@ class TestOpenStreetMapLookup:
     """Test lookup_openstreetmap() with mocking"""
     
     @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
-    @patch('bill_processor.address_lookup.config.CENTER_LAT', None)
-    @patch('bill_processor.address_lookup.config.CENTER_LON', None)
+    @patch('bill_processor.address_lookup.config.LOCALITY_CENTER_LAT', None)
+    @patch('bill_processor.address_lookup.config.LOCALITY_CENTER_LON', None)
     @patch('bill_processor.address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
     @patch('bill_processor.address_lookup.time.sleep')  # Skip the rate limiting sleep
     @patch('bill_processor.address_lookup.requests.get')
@@ -691,8 +691,8 @@ class TestOpenStreetMapLookup:
         assert result is None
     
     @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
-    @patch('bill_processor.address_lookup.config.CENTER_LAT', 38.2527)
-    @patch('bill_processor.address_lookup.config.CENTER_LON', -85.7585)
+    @patch('bill_processor.address_lookup.config.LOCALITY_CENTER_LAT', 38.2527)
+    @patch('bill_processor.address_lookup.config.LOCALITY_CENTER_LON', -85.7585)
     @patch('bill_processor.address_lookup.config.SEARCH_RADIUS_MILES', 25)
     @patch('bill_processor.address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
     @patch('bill_processor.address_lookup.time.sleep')

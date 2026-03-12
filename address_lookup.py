@@ -127,7 +127,7 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
         - phone: Phone number (if available)
         - lat, lng: Coordinates
         - place_id: Google place ID
-        - distance: Distance in miles (if CENTER_LAT/LON configured)
+        - distance: Distance in miles (if LOCALITY_CENTER_LAT/LON configured)
     
     If return_all=True, returns a list of dicts instead.
     Returns None (or empty list) if not found or API error.
@@ -162,17 +162,17 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
         }
         
         # Add location bias if configured
-        if config.CENTER_LAT and config.CENTER_LON:
+        if config.LOCALITY_CENTER_LAT and config.LOCALITY_CENTER_LON:
             body['locationBias'] = {
                 'circle': {
                     'center': {
-                        'latitude': config.CENTER_LAT,
-                        'longitude': config.CENTER_LON
+                        'latitude': config.LOCALITY_CENTER_LAT,
+                        'longitude': config.LOCALITY_CENTER_LON
                     },
                     'radius': config.SEARCH_RADIUS_MILES * 1609  # Convert to meters
                 }
             }
-            logger.debug(f"Adding location bias: center=({config.CENTER_LAT},{config.CENTER_LON}), radius={config.SEARCH_RADIUS_MILES} miles")
+            logger.debug(f"Adding location bias: center=({config.LOCALITY_CENTER_LAT},{config.LOCALITY_CENTER_LON}), radius={config.SEARCH_RADIUS_MILES} miles")
         
         log_api_call("Google Places (New)", "searchText", query=query[:50])
         response = requests.post(url, headers=headers, json=body, timeout=config.API_REQUEST_TIMEOUT_SECONDS)
@@ -219,7 +219,7 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
                 return [] if return_all else None
         
         # Filter by distance if we have center coordinates (use 3x radius)
-        if config.CENTER_LAT and config.CENTER_LON:
+        if config.LOCALITY_CENTER_LAT and config.LOCALITY_CENTER_LON:
             logger.debug("Filtering results by distance")
             max_distance = config.SEARCH_RADIUS_MILES * 3  # More permissive
             filtered = []
@@ -228,7 +228,7 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
                 loc = r.get('location', {})
                 if loc:
                     dist = calculate_distance_miles(
-                        config.CENTER_LAT, config.CENTER_LON,
+                        config.LOCALITY_CENTER_LAT, config.LOCALITY_CENTER_LON,
                         loc.get('latitude', 0), loc.get('longitude', 0)
                     )
                     if dist <= max_distance:
@@ -410,7 +410,7 @@ def lookup_openstreetmap(business_name: str, locality: str = None, return_all: b
         }
         
         # Add viewbox for location bias (but don't bound to it strictly)
-        if config.CENTER_LAT and config.CENTER_LON:
+        if config.LOCALITY_CENTER_LAT and config.LOCALITY_CENTER_LON:
             logger.debug("Adding viewbox for location bias")
             # Create viewbox (rough approximation)
             # 1 degree lat ≈ 69 miles, 1 degree lon varies
@@ -419,8 +419,8 @@ def lookup_openstreetmap(business_name: str, locality: str = None, return_all: b
             
             # Remove bounded=1 to allow results outside viewbox
             params['viewbox'] = (
-                f"{config.CENTER_LON - lon_delta},{config.CENTER_LAT + lat_delta},"
-                f"{config.CENTER_LON + lon_delta},{config.CENTER_LAT - lat_delta}"
+                f"{config.LOCALITY_CENTER_LON - lon_delta},{config.LOCALITY_CENTER_LAT + lat_delta},"
+                f"{config.LOCALITY_CENTER_LON + lon_delta},{config.LOCALITY_CENTER_LAT - lat_delta}"
             )
             logger.debug(f"Viewbox: {params['viewbox']}")
         
@@ -506,7 +506,7 @@ def lookup_openstreetmap(business_name: str, locality: str = None, return_all: b
                 return [] if return_all else None
         
         # Filter by distance (use 3x radius for more permissive filtering)
-        if config.CENTER_LAT and config.CENTER_LON:
+        if config.LOCALITY_CENTER_LAT and config.LOCALITY_CENTER_LON:
             logger.debug("Filtering results by distance")
             max_distance = config.SEARCH_RADIUS_MILES * 3  # More permissive
             filtered = []
@@ -514,7 +514,7 @@ def lookup_openstreetmap(business_name: str, locality: str = None, return_all: b
                 lat = float(r.get('lat', 0))
                 lon = float(r.get('lon', 0))
                 dist = calculate_distance_miles(
-                    config.CENTER_LAT, config.CENTER_LON, lat, lon
+                    config.LOCALITY_CENTER_LAT, config.LOCALITY_CENTER_LON, lat, lon
                 )
                 if dist <= max_distance:
                     r['_distance'] = dist
