@@ -23,7 +23,7 @@ class TestGetSamuseAccountGuid:
         assert row is not None
 
     def test_raises_if_account_missing(self, db_connection, monkeypatch):
-        monkeypatch.setattr(config, "SAMUSE_ACCOUNT_NAME", "NONEXISTENT_XYZ")
+        monkeypatch.setattr(config, "CASH_ON_HAND_ACCOUNT_NAME", "NONEXISTENT_XYZ")
         gnucash_db._samuse_guid_cache = None
         with pytest.raises(ValueError, match="SAMUSE|NONEXISTENT"):
             gnucash_db.get_samuse_account_guid()

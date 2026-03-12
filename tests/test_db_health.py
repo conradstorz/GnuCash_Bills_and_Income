@@ -58,7 +58,7 @@ class TestCheckDbHealth:
              patch("bill_processor.gnucash_db.get_connection", return_value=_make_samuse_conn(False)):
             result = gnucash_db.check_db_health()
         assert result["status"] == "account_missing"
-        assert config.SAMUSE_ACCOUNT_NAME in result["message"]
+        assert config.CASH_ON_HAND_ACCOUNT_NAME in result["message"]
         assert result["hostname"] is None
         assert result["pid"] is None
 

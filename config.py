@@ -80,7 +80,7 @@ DEFAULT_MEMO = "no memo"
 DEFAULT_CURRENCY = "USD"
 
 # Cash-on-hand account name
-SAMUSE_ACCOUNT_NAME = "SAMUSE Cash-on-hand"
+CASH_ON_HAND_ACCOUNT_NAME = "SAMUSE Cash-on-hand"
 
 # Expected name of top-level expense account in chart of accounts
 DEFAULT_EXPENSE_PARENT = "Expenses root"

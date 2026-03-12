@@ -1381,13 +1381,13 @@ def get_samuse_account_guid() -> str:
     with get_connection(readonly=True) as conn:
         row = conn.execute(
             "SELECT guid FROM accounts WHERE name = ? AND placeholder = ?",
-            (config.SAMUSE_ACCOUNT_NAME, config.PLACEHOLDER_FALSE)
+            (config.CASH_ON_HAND_ACCOUNT_NAME, config.PLACEHOLDER_FALSE)
         ).fetchone()
 
     if row is None:
         raise ValueError(
-            f"Account '{config.SAMUSE_ACCOUNT_NAME}' not found in database. "
-            "Verify the account name in config.SAMUSE_ACCOUNT_NAME."
+            f"Account '{config.CASH_ON_HAND_ACCOUNT_NAME}' not found in database. "
+            "Verify the account name in config.CASH_ON_HAND_ACCOUNT_NAME."
         )
 
     _samuse_guid_cache = row["guid"] if hasattr(row, "keys") else row[0]
@@ -1447,14 +1447,14 @@ def check_db_health() -> dict:
     with get_connection(readonly=True) as conn:
         row = conn.execute(
             "SELECT guid FROM accounts WHERE name = ? AND placeholder = ?",
-            (config.SAMUSE_ACCOUNT_NAME, config.PLACEHOLDER_FALSE)
+            (config.CASH_ON_HAND_ACCOUNT_NAME, config.PLACEHOLDER_FALSE)
         ).fetchone()
     if row is None:
         return {
             "status": "account_missing",
             "message": (
-                f"Required account '{config.SAMUSE_ACCOUNT_NAME}' not found in database. "
-                "Create this account in GnuCash or update SAMUSE_ACCOUNT_NAME in config.py."
+                f"Required account '{config.CASH_ON_HAND_ACCOUNT_NAME}' not found in database. "
+                "Create this account in GnuCash or update CASH_ON_HAND_ACCOUNT_NAME in config.py."
             ),
             "path": str(path),
             "hostname": None,
