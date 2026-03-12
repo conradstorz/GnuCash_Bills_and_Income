@@ -29,6 +29,7 @@ data/clients.json
 data/cash_accounts.json
 data/bills_to_process.txt
 data/gnucash_schema.json
+data/user_settings.json  # User-specific runtime configuration
 
 # Columbo snapshots (working files, not source)
 snapshot_before.json

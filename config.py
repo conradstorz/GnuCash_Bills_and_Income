@@ -1,17 +1,40 @@
 """
-Bill Processor Configuration
-Edit these settings for your environment.
+Bill Processor Configuration - System Constants
+
+This file contains IMMUTABLE SYSTEM CONSTANTS that define application behavior.
+For RUNTIME USER-CONFIGURABLE SETTINGS, see settings_manager.py and user_settings.json.
+
+⚠️ CONFIGURATION ARCHITECTURE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+config.py (this file)          → System constants (account types, formats, etc.)
+                                 Never change at runtime
+                                 Modified by developers only
+
+settings_manager.py            → SettingsManager class with load/save/update methods
+user_settings.json            → User preferences (paths, thresholds, UI dimensions)
+                                 Change at runtime via GUI/web interface
+                                 User-editable JSON file
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+USAGE:
+    from settings_manager import settings  # For runtime-configurable settings
+    import config                          # For system constants
+
+EXAMPLES:
+    settings.gnucash_db_path              # User's database path (changeable)
+    settings.fuzzy_match_threshold        # User's matching threshold (changeable)
+    config.ACCOUNT_TYPE_EXPENSE           # GnuCash schema constant (immutable)
+    config.VENDOR_ID_FORMAT               # ID format pattern (immutable)
 
 ⚠️ SECURITY NOTE - CONTAINS PERSONALLY IDENTIFIABLE INFORMATION (PII):
 This file contains location-specific data that should be reviewed before sharing:
-- File paths include the local username ("Conrad")
 - GPS coordinates (LOCALITY_CENTER_LAT/LON) pinpoint a specific geographic location
 - DEFAULT_LOCALITY reveals the city/state of operation
 
 For cross-platform compatibility and privacy:
-- Consider using Path.home() for user-specific paths instead of hardcoded values
-- Replace actual GPS coordinates with placeholder values (0.0, 0.0) or city center
-- Use environment variables or a .env file for sensitive location data
+- User-specific values have been moved to user_settings.json
+- System defaults remain here as fallbacks
+- Use environment variables or .env file for sensitive API keys
 """
 
 import os
