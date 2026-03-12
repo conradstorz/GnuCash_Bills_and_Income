@@ -248,8 +248,8 @@ VENDOR_MANAGER_WINDOW_WIDTH = 800
 VENDOR_MANAGER_WINDOW_HEIGHT = 600
 
 # Dialog window size (used for sync dialogs, account selection, etc.)
-DIALOG_WIDTH = 600
-DIALOG_HEIGHT = 400
+DIALOG_WINDOW_WIDTH = 600
+DIALOG_WINDOW_HEIGHT = 400
 
 # Widget dimensions
 COMBOBOX_WIDTH = 70  # Width in characters for dropdown boxes
