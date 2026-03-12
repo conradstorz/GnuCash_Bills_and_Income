@@ -1,6 +1,17 @@
 """
 Bill Processor Configuration
 Edit these settings for your environment.
+
+⚠️ SECURITY NOTE - CONTAINS PERSONALLY IDENTIFIABLE INFORMATION (PII):
+This file contains location-specific data that should be reviewed before sharing:
+- File paths include the local username ("Conrad")
+- GPS coordinates (LOCALITY_CENTER_LAT/LON) pinpoint a specific geographic location
+- DEFAULT_LOCALITY reveals the city/state of operation
+
+For cross-platform compatibility and privacy:
+- Consider using Path.home() for user-specific paths instead of hardcoded values
+- Replace actual GPS coordinates with placeholder values (0.0, 0.0) or city center
+- Use environment variables or a .env file for sensitive location data
 """
 
 import os
