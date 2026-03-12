@@ -14,6 +14,9 @@ MISSING = {"status": "missing",
 LOCKED  = {"status": "locked",
            "message": "Database is locked by GnuCash@HOST (PID 999).",
            "path": "D:\\fake\\db.gnucash", "hostname": "GnuCash@HOST", "pid": 999}
+ACCOUNT_MISSING = {"status": "account_missing",
+                   "message": "Required account 'SAMUSE Cash-on-hand' not found in database.",
+                   "path": "D:\\fake\\db.gnucash", "hostname": None, "pid": None}
 
 
 class TestGetDashboardHealthCheck:
@@ -53,6 +56,18 @@ class TestGetDashboardHealthCheck:
 
     def test_locked_db_does_not_show_browse_button(self):
         with patch("bill_processor.gnucash_db.check_db_health", return_value=LOCKED):
+            response = client.get("/")
+        assert "Browse for database file" not in response.text
+
+    def test_account_missing_renders_error_page(self):
+        with patch("bill_processor.gnucash_db.check_db_health", return_value=ACCOUNT_MISSING):
+            response = client.get("/")
+        assert response.status_code == 200
+        assert "Database Unavailable" in response.text
+        assert "SAMUSE" in response.text
+
+    def test_account_missing_does_not_show_browse_button(self):
+        with patch("bill_processor.gnucash_db.check_db_health", return_value=ACCOUNT_MISSING):
             response = client.get("/")
         assert "Browse for database file" not in response.text
 

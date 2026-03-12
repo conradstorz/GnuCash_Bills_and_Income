@@ -8,11 +8,7 @@ script, and optionally copies it to the desktop.
 
 Run with:
     uv run python install.py
-
-Logging: stdlib only (no loguru, no bill_processor imports) so this script
-runs before the venv is fully configured.
 """
-import logging
 import os
 import re
 import shutil
@@ -21,46 +17,23 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Logging setup — stdout so pytest capsys captures it; DEBUG to log file
-# ---------------------------------------------------------------------------
-_log_file = Path(__file__).parent / "logs" / "installer.log"
-_log_file.parent.mkdir(exist_ok=True)
+from loguru import logger
+from bill_processor import logging_setup
 
-logger = logging.getLogger("installer")
-logger.setLevel(logging.DEBUG)
-
-if not logger.handlers:
-    _console = logging.StreamHandler(sys.stdout)
-    _console.setLevel(logging.INFO)
-    _console.setFormatter(logging.Formatter("%(message)s"))
-    logger.addHandler(_console)
-
-    _file = logging.FileHandler(_log_file, encoding="utf-8")
-    _file.setLevel(logging.DEBUG)
-    _file.setFormatter(logging.Formatter(
-        "%(asctime)s | %(levelname)-8s | %(funcName)s:%(lineno)d - %(message)s"
-    ))
-    logger.addHandler(_file)
-
-
-# ---------------------------------------------------------------------------
-# Installer functions
-# ---------------------------------------------------------------------------
 
 def update_config(config_path: Path, project_root: Path, db_path: Path) -> None:
     """Update PROJECT_ROOT and GNUCASH_DB_PATH in config.py.
 
     Raises ValueError if either pattern is not found (file is not written).
     """
-    logger.debug("Updating config file: %s", config_path)
-    logger.debug("  PROJECT_ROOT=%s", project_root)
-    logger.debug("  GNUCASH_DB_PATH=%s", db_path)
-
+    logger.debug(f"Updating config file: {config_path}")
+    logger.debug(f"  PROJECT_ROOT={project_root}")
+    logger.debug(f"  GNUCASH_DB_PATH={db_path}")
+    
     text = config_path.read_text(encoding="utf-8")
 
     new_text, count1 = re.subn(
-        r'(PROJECT_ROOT\s*=\s*Path\(r?)["\'].*?["\'](\))',
+        r'(PROJECT_ROOT\s*=\s*Path\()r?["\'].*?["\'](\))',
         lambda m: f'{m.group(1)}r"{project_root}"{m.group(2)}',
         text,
     )
@@ -69,7 +42,7 @@ def update_config(config_path: Path, project_root: Path, db_path: Path) -> None:
         raise ValueError("Could not find PROJECT_ROOT in config.py")
 
     new_text, count2 = re.subn(
-        r'(GNUCASH_DB_PATH\s*=\s*Path\(r?)["\'].*?["\'](\))',
+        r'(GNUCASH_DB_PATH\s*=\s*Path\()r?["\'].*?["\'](\))',
         lambda m: f'{m.group(1)}r"{db_path}"{m.group(2)}',
         new_text,
     )
@@ -87,13 +60,13 @@ def search_for_gnucash(search_root: Path) -> list:
     Returns list of Paths sorted newest-modified first.
     Returns empty list if search_root does not exist.
     """
-    logger.debug("Searching for .gnucash files in: %s", search_root)
+    logger.debug(f"Searching for .gnucash files in: {search_root}")
     if not search_root.exists():
-        logger.debug("Search root does not exist: %s", search_root)
+        logger.debug(f"Search root does not exist: {search_root}")
         return []
     files = list(search_root.rglob("*.gnucash"))
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    logger.debug("Found %d .gnucash file(s)", len(files))
+    logger.debug(f"Found {len(files)} .gnucash file(s)")
     return files
 
 
@@ -119,12 +92,12 @@ def open_file_picker():
         path_str = result.stdout.strip()
         selected_path = Path(path_str) if path_str else None
         if selected_path:
-            logger.debug("User selected file: %s", selected_path)
+            logger.debug(f"User selected file: {selected_path}")
         else:
             logger.debug("File picker cancelled by user")
         return selected_path
     except Exception as e:
-        logger.error("File picker failed: %s", e)
+        logger.error(f"File picker failed: {e}")
         return None
 
 
@@ -140,7 +113,7 @@ def pick_gnucash_file(candidates: list):
         logger.info("\nFound .gnucash files:")
         for i, p in enumerate(candidates, 1):
             mtime = datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d")
-            logger.info("  %d. %s  (modified %s)", i, p, mtime)
+            logger.info(f"  {i}. {p}  (modified {mtime})")
         logger.info("  b. Browse for a different file...")
         logger.info("")
     else:
@@ -164,9 +137,9 @@ def pick_gnucash_file(candidates: list):
         if choice.isdigit():
             idx = int(choice) - 1
             if 0 <= idx < len(candidates):
-                logger.debug("User selected file #%s: %s", choice, candidates[idx])
+                logger.debug(f"User selected file #{choice}: {candidates[idx]}")
                 return candidates[idx]
-            logger.info("  Please enter a number between 1 and %d.", len(candidates))
+            logger.info(f"  Please enter a number between 1 and {len(candidates)}.")
         else:
             logger.info("  Invalid choice.")
 
@@ -179,7 +152,7 @@ def generate_launcher(project_root: Path) -> Path:
 
     Returns the Path of the written launcher file.
     """
-    logger.debug("Generating launcher for platform: %s", sys.platform)
+    logger.debug(f"Generating launcher for platform: {sys.platform}")
     if sys.platform == "win32":
         launcher_path = project_root / "GnuCash Bills.bat"
         content = (
@@ -207,7 +180,7 @@ def generate_launcher(project_root: Path) -> Path:
         )
 
     launcher_path.write_text(content, encoding="utf-8")
-    logger.debug("Launcher written to: %s", launcher_path)
+    logger.debug(f"Launcher written to: {launcher_path}")
 
     if sys.platform != "win32":
         os.chmod(launcher_path, 0o755)
@@ -223,16 +196,17 @@ def copy_to_desktop(launcher_path: Path) -> bool:
     Prints a message if the Desktop folder is not found.
     """
     desktop = Path.home() / "Desktop"
-    logger.debug("Checking for Desktop folder: %s", desktop)
+    logger.debug(f"Checking for Desktop folder: {desktop}")
 
     if not desktop.exists():
-        logger.info("\nDesktop folder not found. Launcher is at:\n  %s", launcher_path)
+        logger.info(f"\nDesktop folder not found. Launcher is at:\n  {launcher_path}")
         return False
 
     dest = desktop / launcher_path.name
+    logger.info(f"Attempting to place a launcher shortcut on your Desktop: {dest}")
 
     if dest.exists():
-        print(f"\n'{launcher_path.name}' already exists on Desktop. Overwrite? [Y/n]: ", end="", flush=True)
+        print(f"\n'{launcher_path.name}' already exists on Desktop. Overwrite? [Y/n]: ", end="")
         answer = input("").strip().lower()
     else:
         answer = input(
@@ -241,15 +215,15 @@ def copy_to_desktop(launcher_path: Path) -> bool:
 
     if answer not in ("", "y", "yes"):
         logger.info("Skipped desktop copy.")
-        logger.debug("User declined desktop copy (answer: %s)", answer)
+        logger.debug(f"User declined desktop copy (answer: {answer})")
         return False
 
     try:
         shutil.copy2(launcher_path, dest)
-        logger.debug("Successfully copied launcher to: %s", dest)
+        logger.debug(f"Successfully copied launcher to: {dest}")
         return True
     except Exception as e:
-        logger.error("Could not copy to Desktop: %s", e)
+        logger.error(f"Could not copy to Desktop: {e}")
         return False
 
 
@@ -264,12 +238,28 @@ def main(config_path: Path = None, project_root: Path = None):
     if config_path is None:
         config_path = project_root / "config.py"
 
+    # Setup logging with simple console output (just the message)
+    logging_setup.setup_logging(module_name="install")
+    # Reconfigure console handler for simple output
+    logger.remove()  # Remove all handlers
+    # Add simple console handler (just the message)
+    logger.add(sys.stderr, format="{message}", level="INFO", colorize=False)
+    # Add detailed file handler
+    from bill_processor import config
+    logger.add(
+        config.LOG_FILE_PATH,
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+        level="DEBUG",
+        rotation="10 MB",
+        retention="30 days",
+    )
+    
     logger.debug("Starting GnuCash Bills Installer")
-    logger.debug("Project root: %s", project_root)
-    logger.debug("Config path: %s", config_path)
+    logger.debug(f"Project root: {project_root}")
+    logger.debug(f"Config path: {config_path}")
 
     logger.info("GnuCash Bills Installer")
-    logger.info("Project root: %s", project_root)
+    logger.info(f"Project root: {project_root}")
     logger.info("")
 
     # Find the GnuCash database
@@ -279,19 +269,24 @@ def main(config_path: Path = None, project_root: Path = None):
 
     if db_path is None:
         logger.info("No database selected. Exiting.")
+        logger.debug("Installation cancelled - no database selected")
         return
 
     # Update config.py
     try:
         update_config(config_path, project_root, db_path)
-        logger.info("Updated config.py")
+        logger.info(f"Updated config.py")
     except ValueError as e:
-        logger.error("Error: %s", e)
+        logger.error(f"Error: {e}")
         return
 
     # Generate launcher
-    launcher_path = generate_launcher(project_root)
-    logger.info("Generated launcher: %s", launcher_path.name)
+    try:
+        launcher_path = generate_launcher(project_root)
+        logger.info(f"Generated launcher: {launcher_path.name}")
+    except Exception as e:
+        logger.error(f"Error generating launcher: {e}")
+        return
 
     # Desktop copy
     copied = copy_to_desktop(launcher_path)
@@ -299,10 +294,10 @@ def main(config_path: Path = None, project_root: Path = None):
     # Summary
     logger.info("")
     logger.info("Setup complete!")
-    logger.info("  Project root:  %s", project_root)
-    logger.info("  Database:      %s", db_path)
+    logger.info(f"  Project root:  {project_root}")
+    logger.info(f"  Database:      {db_path}")
     suffix = " (also copied to Desktop)" if copied else ""
-    logger.info("  Launcher:      %s%s", launcher_path.name, suffix)
+    logger.info(f"  Launcher:      {launcher_path.name}{suffix}")
     logger.debug("Installation completed successfully")
 
 
