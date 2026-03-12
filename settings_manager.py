@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional
 from loguru import logger
 
-import config
+from bill_processor import config
 
 
 class SettingsManager:

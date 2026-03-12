@@ -19,6 +19,7 @@ from loguru import logger
 
 from bill_processor import gnucash_db
 from bill_processor import config
+from bill_processor.settings_manager import settings
 import bill_processor.address_lookup as addr_lookup
 from bill_processor.utils import parse_input_line, fuzzy_match_vendor, strip_vendor_name
 from bill_processor.vendor_manager import VendorManager
@@ -34,6 +35,20 @@ app = FastAPI(title="GnuCash Bill Processor")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 VENDOR_SEARCH_MIN_SCORE = 40  # Lower threshold for dropdown suggestions
+
+
+def _get_enabled_cash_accounts() -> list:
+    """Get cash accounts that are enabled in settings."""
+    all_accounts = gnucash_db.get_cash_accounts()
+    enabled_guids = settings.get("enabled_cash_account_guids", [])
+    
+    # If no enabled list exists, enable all by default
+    if not enabled_guids:
+        enabled_guids = [acct["guid"] for acct in all_accounts]
+        settings.set("enabled_cash_account_guids", enabled_guids)
+    
+    # Filter to only enabled accounts
+    return [acct for acct in all_accounts if acct["guid"] in enabled_guids]
 
 
 def _get_sync_status() -> dict:
@@ -95,7 +110,7 @@ def dashboard(request: Request):
         "tomorrow": (date.today() + timedelta(days=1)).isoformat(),
         "last_error": None,
         "error": None,
-        "cash_accounts": gnucash_db.get_cash_accounts(),
+        "cash_accounts": _get_enabled_cash_accounts(),
         "bank_accounts": gnucash_db.get_checking_accounts(),
     })
 
@@ -429,7 +444,7 @@ def get_queued_bills_partial(request: Request):
 @app.get("/cash/add-row")
 async def cash_add_row(request: Request):
     """Return a blank line item row for the cash entry table."""
-    cash_accounts = gnucash_db.get_cash_accounts()
+    cash_accounts = _get_enabled_cash_accounts()
     return templates.TemplateResponse(request, "partials/cash_row.html", {
         "cash_accounts": cash_accounts,
     })
@@ -488,7 +503,7 @@ async def cash_submit(request: Request):
             request,
             "partials/cash_entry.html",
             {
-                "cash_accounts": gnucash_db.get_cash_accounts(),
+                "cash_accounts": _get_enabled_cash_accounts(),
                 "bank_accounts": gnucash_db.get_checking_accounts(),
                 "today": today.isoformat(),
                 "tomorrow": (today + timedelta(days=1)).isoformat(),
@@ -620,6 +635,225 @@ async def db_set_path(request: Request):
     importlib.reload(cfg)
 
     return RedirectResponse(url="/", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Settings routes
+# ---------------------------------------------------------------------------
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    """Render the settings page."""
+    # Get all available cash accounts from GnuCash
+    all_cash_accounts = gnucash_db.get_cash_accounts()
+    
+    # Get currently enabled cash account GUIDs
+    enabled_guids = settings.get("enabled_cash_account_guids", [])
+    if not enabled_guids:
+        # If not set, enable all accounts by default
+        enabled_guids = [acct["guid"] for acct in all_cash_accounts]
+        settings.set("enabled_cash_account_guids", enabled_guids)
+    
+    # Mark which accounts are enabled
+    for acct in all_cash_accounts:
+        acct["enabled"] = acct["guid"] in enabled_guids
+    
+    return templates.TemplateResponse(request, "settings.html", {
+        "settings": settings,
+        "cash_accounts": all_cash_accounts,
+        "current_cash_on_hand": settings.get("cash_on_hand_account_name"),
+        "success": None,
+        "error": None,
+    })
+
+
+@app.post("/settings/cash-accounts", response_class=HTMLResponse)
+async def update_cash_accounts(request: Request):
+    """Update which cash accounts are enabled for cash entry dropdown."""
+    form = await request.form()
+    
+    # Get list of checked account GUIDs
+    enabled_guids = form.getlist("enabled_accounts")
+    
+    if not enabled_guids:
+        # If none selected, show error
+        all_cash_accounts = gnucash_db.get_cash_accounts()
+        for acct in all_cash_accounts:
+            acct["enabled"] = False
+        
+        return templates.TemplateResponse(request, "settings.html", {
+            "settings": settings,
+            "cash_accounts": all_cash_accounts,
+            "current_cash_on_hand": settings.get("cash_on_hand_account_name"),
+            "success": None,
+            "error": "At least one cash account must be enabled.",
+        })
+    
+    # Save to settings
+    settings.set("enabled_cash_account_guids", enabled_guids)
+    logger.info(f"Updated enabled cash accounts: {len(enabled_guids)} accounts")
+    
+    # Redirect back to settings page with success message
+    all_cash_accounts = gnucash_db.get_cash_accounts()
+    for acct in all_cash_accounts:
+        acct["enabled"] = acct["guid"] in enabled_guids
+    
+    return templates.TemplateResponse(request, "settings.html", {
+        "settings": settings,
+        "cash_accounts": all_cash_accounts,
+        "current_cash_on_hand": settings.get("cash_on_hand_account_name"),
+        "success": f"Updated cash account visibility - {len(enabled_guids)} accounts enabled",
+        "error": None,
+    })
+
+
+@app.post("/settings/cash-on-hand-account", response_class=HTMLResponse)
+async def update_cash_on_hand_account(request: Request):
+    """Update the cash-on-hand account setting."""
+    form = await request.form()
+    new_account_name = (form.get("cash_on_hand_account") or "").strip()
+    
+    if not new_account_name:
+        all_cash_accounts = gnucash_db.get_cash_accounts()
+        enabled_guids = settings.get("enabled_cash_account_guids", [])
+        for acct in all_cash_accounts:
+            acct["enabled"] = acct["guid"] in enabled_guids
+        
+        return templates.TemplateResponse(request, "settings.html", {
+            "settings": settings,
+            "cash_accounts": all_cash_accounts,
+            "current_cash_on_hand": settings.get("cash_on_hand_account_name"),
+            "success": None,
+            "error": "Cash-on-hand account name cannot be empty.",
+        })
+    
+    # Update setting
+    settings.set("cash_on_hand_account_name", new_account_name)
+    logger.info(f"Updated cash-on-hand account to: {new_account_name}")
+    
+    # Redirect back with success message
+    all_cash_accounts = gnucash_db.get_cash_accounts()
+    enabled_guids = settings.get("enabled_cash_account_guids", [])
+    for acct in all_cash_accounts:
+        acct["enabled"] = acct["guid"] in enabled_guids
+    
+    return templates.TemplateResponse(request, "settings.html", {
+        "settings": settings,
+        "cash_accounts": all_cash_accounts,
+        "current_cash_on_hand": new_account_name,
+        "success": f"Cash-on-hand account updated to: {new_account_name}",
+        "error": None,
+    })
+
+
+@app.post("/settings/locality", response_class=HTMLResponse)
+async def update_locality_settings(request: Request):
+    """Update locality settings."""
+    form = await request.form()
+    
+    city = (form.get("locality_city") or "").strip()
+    state = (form.get("locality_state") or "").strip()
+    country = (form.get("locality_country") or "").strip()
+    
+    try:
+        latitude = float(form.get("home_latitude") or 0)
+        longitude = float(form.get("home_longitude") or 0)
+        search_radius = int(form.get("search_radius_miles") or 30)
+    except (ValueError, TypeError):
+        all_cash_accounts = gnucash_db.get_cash_accounts()
+        enabled_guids = settings.get("enabled_cash_account_guids", [])
+        for acct in all_cash_accounts:
+            acct["enabled"] = acct["guid"] in enabled_guids
+        
+        return templates.TemplateResponse(request, "settings.html", {
+            "settings": settings,
+            "cash_accounts": all_cash_accounts,
+            "current_cash_on_hand": settings.get("cash_on_hand_account_name"),
+            "success": None,
+            "error": "Invalid numeric values for coordinates or search radius.",
+        })
+    
+    # Update locality
+    settings.update_locality(city, state, country, latitude, longitude, search_radius)
+    logger.info(f"Updated locality settings: {city}, {state}")
+    
+    all_cash_accounts = gnucash_db.get_cash_accounts()
+    enabled_guids = settings.get("enabled_cash_account_guids", [])
+    for acct in all_cash_accounts:
+        acct["enabled"] = acct["guid"] in enabled_guids
+    
+    return templates.TemplateResponse(request, "settings.html", {
+        "settings": settings,
+        "cash_accounts": all_cash_accounts,
+        "current_cash_on_hand": settings.get("cash_on_hand_account_name"),
+        "success": f"Locality updated: {city}, {state} ({search_radius} mile radius)",
+        "error": None,
+    })
+
+
+@app.post("/settings/fuzzy-matching", response_class=HTMLResponse)
+async def update_fuzzy_matching(request: Request):
+    """Update fuzzy matching thresholds."""
+    form = await request.form()
+    
+    try:
+        threshold = int(form.get("fuzzy_match_threshold") or 70)
+        ambiguous = int(form.get("fuzzy_ambiguous_threshold") or 85)
+    except (ValueError, TypeError):
+        all_cash_accounts = gnucash_db.get_cash_accounts()
+        enabled_guids = settings.get("enabled_cash_account_guids", [])
+        for acct in all_cash_accounts:
+            acct["enabled"] = acct["guid"] in enabled_guids
+        
+        return templates.TemplateResponse(request, "settings.html", {
+            "settings": settings,
+            "cash_accounts": all_cash_accounts,
+            "current_cash_on_hand": settings.get("cash_on_hand_account_name"),
+            "success": None,
+            "error": "Invalid numeric values for fuzzy matching thresholds.",
+        })
+    
+    # Validate ranges
+    if not 0 <= threshold <= 100 or not 0 <= ambiguous <= 100:
+        all_cash_accounts = gnucash_db.get_cash_accounts()
+        enabled_guids = settings.get("enabled_cash_account_guids", [])
+        for acct in all_cash_accounts:
+            acct["enabled"] = acct["guid"] in enabled_guids
+        
+        return templates.TemplateResponse(request, "settings.html", {
+            "settings": settings,
+            "cash_accounts": all_cash_accounts,
+            "current_cash_on_hand": settings.get("cash_on_hand_account_name"),
+            "success": None,
+            "error": "Thresholds must be between 0 and 100.",
+        })
+    
+    settings.update(
+        fuzzy_match_threshold=threshold,
+        fuzzy_ambiguous_threshold=ambiguous
+    )
+    logger.info(f"Updated fuzzy matching: threshold={threshold}, ambiguous={ambiguous}")
+    
+    all_cash_accounts = gnucash_db.get_cash_accounts()
+    enabled_guids = settings.get("enabled_cash_account_guids", [])
+    for acct in all_cash_accounts:
+        acct["enabled"] = acct["guid"] in enabled_guids
+    
+    return templates.TemplateResponse(request, "settings.html", {
+        "settings": settings,
+        "cash_accounts": all_cash_accounts,
+        "current_cash_on_hand": settings.get("cash_on_hand_account_name"),
+        "success": f"Fuzzy matching updated: threshold={threshold}, ambiguous={ambiguous}",
+        "error": None,
+    })
+
+
+@app.post("/settings/reset")
+async def reset_settings(request: Request):
+    """Reset all settings to defaults."""
+    settings.reset_to_defaults()
+    logger.info("Reset all settings to defaults")
+    return RedirectResponse(url="/settings", status_code=303)
 
 
 @app.post("/shutdown")

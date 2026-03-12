@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - GnuCash Bill Processor{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+  <h2>Application Settings</h2>
+
+  {% if success %}
+  <div class="success-msg">✓ {{ success }}</div>
+  {% endif %}
+
+  {% if error %}
+  <div class="error-msg">✗ {{ error }}</div>
+  {% endif %}
+
+  <!-- Cash Accounts Section -->
+  <section class="settings-section">
+    <h3>Cash Entry Accounts</h3>
+    <p class="help-text">Select which income/asset accounts appear in the cash entry dropdown.</p>
+    
+    <form method="post" action="/settings/cash-accounts">
+      <div class="cash-accounts-grid">
+        {% for acct in cash_accounts %}
+        <label class="account-checkbox">
+          <input type="checkbox" 
+                 name="enabled_accounts" 
+                 value="{{ acct.guid }}"
+                 {% if acct.enabled %}checked{% endif %}>
+          <span class="account-name">{{ acct.name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn-primary">Update Cash Accounts</button>
+    </form>
+  </section>
+
+  <!-- Cash-on-Hand Account Section -->
+  <section class="settings-section">
+    <h3>Cash-on-Hand Account</h3>
+    <p class="help-text">The account where cash receipts are recorded (typically an asset account like "Cash-on-hand").</p>
+    
+    <form method="post" action="/settings/cash-on-hand-account">
+      <div class="form-group">
+        <label for="cash_on_hand_account">Account Name:</label>
+        <input type="text" 
+               id="cash_on_hand_account" 
+               name="cash_on_hand_account" 
+               value="{{ current_cash_on_hand }}"
+               required
+               class="form-control">
+        <small class="help-text">Enter the exact name as it appears in your GnuCash chart of accounts.</small>
+      </div>
+      <button type="submit" class="btn-primary">Update Cash-on-Hand Account</button>
+    </form>
+  </section>
+
+  <!-- Locality Settings Section -->
+  <section class="settings-section">
+    <h3>Locality Settings</h3>
+    <p class="help-text">Your geographic location for address lookup and distance filtering.</p>
+    
+    <form method="post" action="/settings/locality">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="locality_city">City:</label>
+          <input type="text" 
+                 id="locality_city" 
+                 name="locality_city" 
+                 value="{{ settings.locality_city }}"
+                 required>
+        </div>
+        <div class="form-group">
+          <label for="locality_state">State:</label>
+          <input type="text" 
+                 id="locality_state" 
+                 name="locality_state" 
+                 value="{{ settings.locality_state }}"
+                 required
+                 maxlength="2"
+                 style="width: 80px;">
+        </div>
+        <div class="form-group">
+          <label for="locality_country">Country:</label>
+          <input type="text" 
+                 id="locality_country" 
+                 name="locality_country" 
+                 value="{{ settings.get('locality_country', 'US') }}"
+                 required
+                 maxlength="2"
+                 style="width: 80px;">
+        </div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label for="home_latitude">Latitude:</label>
+          <input type="number" 
+                 id="home_latitude" 
+                 name="home_latitude" 
+                 value="{{ settings.get('home_latitude', 0) }}"
+                 step="0.0001"
+                 required>
+        </div>
+        <div class="form-group">
+          <label for="home_longitude">Longitude:</label>
+          <input type="number" 
+                 id="home_longitude" 
+                 name="home_longitude" 
+                 value="{{ settings.get('home_longitude', 0) }}"
+                 step="0.0001"
+                 required>
+        </div>
+        <div class="form-group">
+          <label for="search_radius_miles">Search Radius (miles):</label>
+          <input type="number" 
+                 id="search_radius_miles" 
+                 name="search_radius_miles" 
+                 value="{{ settings.get('search_radius_miles', 30) }}"
+                 min="1"
+                 max="50"
+                 required>
+        </div>
+      </div>
+      
+      <button type="submit" class="btn-primary">Update Locality</button>
+    </form>
+  </section>
+
+  <!-- Fuzzy Matching Section -->
+  <section class="settings-section">
+    <h3>Fuzzy Matching</h3>
+    <p class="help-text">Adjust vendor name matching sensitivity (0-100).</p>
+    
+    <form method="post" action="/settings/fuzzy-matching">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="fuzzy_match_threshold">Match Threshold:</label>
+          <input type="number" 
+                 id="fuzzy_match_threshold" 
+                 name="fuzzy_match_threshold" 
+                 value="{{ settings.get('fuzzy_match_threshold', 70) }}"
+                 min="0"
+                 max="100"
+                 required>
+          <small class="help-text">Minimum score to consider a vendor match valid (default: 70).</small>
+        </div>
+        <div class="form-group">
+          <label for="fuzzy_ambiguous_threshold">Ambiguous Threshold:</label>
+          <input type="number" 
+                 id="fuzzy_ambiguous_threshold" 
+                 name="fuzzy_ambiguous_threshold" 
+                 value="{{ settings.get('fuzzy_ambiguous_threshold', 85) }}"
+                 min="0"
+                 max="100"
+                 required>
+          <small class="help-text">Flag multiple vendors scoring above this (default: 85).</small>
+        </div>
+      </div>
+      
+      <button type="submit" class="btn-primary">Update Fuzzy Matching</button>
+    </form>
+  </section>
+
+  <!-- Reset Section -->
+  <section class="settings-section danger-zone">
+    <h3>Reset Settings</h3>
+    <p class="help-text">Reset all settings to their default values from config.py.</p>
+    
+    <form method="post" action="/settings/reset" onsubmit="return confirm('Are you sure you want to reset all settings to defaults? This cannot be undone.');">
+      <button type="submit" class="btn-danger">Reset All Settings to Defaults</button>
+    </form>
+  </section>
+
+  <div class="settings-footer">
+    <a href="/" class="btn-secondary">← Back to Dashboard</a>
+  </div>
+</div>
+
+<style>
+.settings-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.settings-section {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.settings-section h3 {
+  margin-top: 0;
+  color: #333;
+  font-size: 1.3em;
+}
+
+.help-text {
+  color: #666;
+  font-size: 0.9em;
+  margin-bottom: 16px;
+}
+
+.cash-accounts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.account-checkbox {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.account-checkbox:hover {
+  background: #f0f0f0;
+}
+
+.account-checkbox input[type="checkbox"] {
+  margin-right: 10px;
+  cursor: pointer;
+}
+
+.account-name {
+  font-size: 0.95em;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #333;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1em;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.form-group small {
+  display: block;
+  margin-top: 4px;
+  color: #666;
+  font-size: 0.85em;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 1em;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-primary {
+  background: #4CAF50;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #45a049;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+}
+
+.danger-zone {
+  border-color: #dc3545;
+  background: #fff5f5;
+}
+
+.success-msg {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.error-msg {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.settings-footer {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid #dee2e6;
+}
+</style>
+{% endblock %}
