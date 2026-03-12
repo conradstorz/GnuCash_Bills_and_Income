@@ -80,7 +80,17 @@ python columbo.py path/to/book.gnucash
 
 ### Key Supporting Modules
 
-- **`config.py`** — All paths and settings; start here for environment setup. `PROJECT_ROOT` points to the repo root. Paths reference `D:\Users\Conrad\Documents\GnuCash\` for real data.
+- **`config.py`** — **CENTRALIZED CONFIGURATION** for all paths, settings, and constants. Start here for environment setup. Contains 8 organized sections:
+  - **GnuCash Settings:** Database path, business rules (vendor defaults, expense parent, A/P account pattern), lock hostname prefix, SAMUSE account name
+  - **GnuCash Schema Constants:** Account types (ROOT, EXPENSE, PAYABLE, BANK, LIABILITY, ASSET, INCOME), placeholder flags, active/inactive flags
+  - **Address Lookup API Settings:** Timeouts, rate limits, OSM URL, result limits, business name suffixes
+  - **Fuzzy Matching Settings:** Autocomplete thresholds (prefix=100, contains=50, min=70), max results (autocomplete=5, web vendor search=10, client search=10)
+  - **Date Parsing:** Alternative date format patterns for flexible input parsing
+  - **Distance Calculation:** Earth radius for Haversine formula
+  - **UI Settings:** Window dimensions (bill entry 800x700, vendor manager 1000x650, dialogs 600x400), widget widths (combobox 70, entry fields 50/20/15), treeview columns (vendor 200, amount 80, memo 250, date 80), autocomplete appearance
+  - **Web Server:** Shutdown delay (1.0s) to allow final response
+  - **⚠️ Important:** All modules import from `config`, not hardcoded values. To change behavior (timeouts, thresholds, UI sizes), edit `config.py`.
+  - `PROJECT_ROOT` points to the repo root. Paths reference `D:\Users\Conrad\Documents\GnuCash\` for real data.
 - **`schema_discovery.py`** — Handles GnuCash version differences by detecting column names at runtime; caches results in `gnucash_schema.json`.
 - **`logging_setup.py`** — loguru-based logging; console=INFO, file=DEBUG at `logs/bill_processor.log`.
 
