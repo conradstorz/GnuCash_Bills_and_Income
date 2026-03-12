@@ -2,7 +2,7 @@
 import sqlite3
 import pytest
 from unittest.mock import patch, MagicMock
-from bill_processor import gnucash_db
+from bill_processor import gnucash_db, config
 
 
 def _make_fake_conn(rows):
@@ -48,9 +48,13 @@ class TestGetCashAccounts:
         conn = _make_fake_conn([])
         with patch("bill_processor.gnucash_db.get_connection", return_value=conn):
             gnucash_db.get_cash_accounts()
+        # Check SQL contains account_type IN clause
         sql = conn.execute.call_args[0][0].upper()
-        assert "INCOME" in sql
-        assert "ASSET" in sql
+        assert "ACCOUNT_TYPE IN" in sql
+        # Check parameters include INCOME and ASSET types
+        params = conn.execute.call_args[0][1] if len(conn.execute.call_args[0]) > 1 else ()
+        assert config.ACCOUNT_TYPE_INCOME in params
+        assert config.ACCOUNT_TYPE_ASSET in params
 
     def test_excludes_placeholder_accounts(self):
         conn = _make_fake_conn([])
@@ -58,6 +62,9 @@ class TestGetCashAccounts:
             gnucash_db.get_cash_accounts()
         sql = conn.execute.call_args[0][0].upper()
         assert "PLACEHOLDER" in sql
+        # Verify placeholder parameter is set to FALSE (0)
+        params = conn.execute.call_args[0][1] if len(conn.execute.call_args[0]) > 1 else ()
+        assert config.PLACEHOLDER_FALSE in params
 
     def test_result_dicts_have_name_and_guid(self):
         rows = [_row("c" * 32, "Rental Income")]
