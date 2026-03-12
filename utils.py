@@ -23,8 +23,7 @@ def strip_vendor_name(name: str) -> str:
     stripped = name.lower()
     
     # Replace common business suffixes
-    suffixes = [' inc', ' llc', ' ltd', ' corp', ' co', ' company', ' incorporated']
-    for suffix in suffixes:
+    for suffix in config.BUSINESS_NAME_SUFFIXES:
         if stripped.endswith(suffix):
             stripped = stripped[:-len(suffix)]
     
@@ -93,7 +92,7 @@ def parse_input_line(line: str) -> Optional[dict]:
             bill_date = datetime.strptime(parts[3], "%Y-%m-%d").date()
         except ValueError:
             # Try alternate formats
-            for fmt in ["%m/%d/%Y", "%m-%d-%Y", "%Y/%m/%d"]:
+            for fmt in config.ALTERNATIVE_DATE_FORMATS:
                 try:
                     bill_date = datetime.strptime(parts[3], fmt).date()
                     break
@@ -250,7 +249,7 @@ def calculate_distance_miles(lat1: float, lon1: float, lat2: float, lon2: float)
     """
     import math
     
-    R = 3959  # Earth's radius in miles
+    R = config.EARTH_RADIUS_MILES  # Earth's radius in miles
     
     lat1_rad = math.radians(lat1)
     lat2_rad = math.radians(lat2)
