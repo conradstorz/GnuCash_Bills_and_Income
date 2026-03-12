@@ -1,6 +1,7 @@
 """Client name list I/O for cash entry memo autocomplete."""
 
 import json
+from bill_processor import config
 from bill_processor.config import CLIENTS_PATH
 
 
@@ -15,7 +16,7 @@ def read_clients() -> list:
         return []
 
 
-def search_clients(query: str, limit: int = 10) -> list:
+def search_clients(query: str, limit: int = config.CLIENT_SEARCH_MAX_RESULTS) -> list:
     """Return client names that start with or contain query (case-insensitive)."""
     q = query.strip().lower()
     if not q:

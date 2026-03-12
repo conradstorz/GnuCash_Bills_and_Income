@@ -626,7 +626,7 @@ async def db_set_path(request: Request):
 def shutdown():
     """Stop the server. Uses os._exit for reliable cross-platform termination."""
     def _stop():
-        time.sleep(1.0)
+        time.sleep(config.SERVER_SHUTDOWN_DELAY_SECONDS)
         os._exit(0)
     threading.Thread(target=_stop, daemon=True).start()
     return {"message": "Server shutting down"}
