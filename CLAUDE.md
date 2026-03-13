@@ -144,8 +144,9 @@ The dashboard uses a split-screen layout: bills panel (left) and cash entry pane
 | `GET /clients/search` | JSON client name search |
 | `POST /cash/submit` | Validates and posts cash batch to GnuCash |
 | `GET /accounts/asset` | JSON list of all asset account names |
+| `GET /accounts/all` | JSON list of all account names (any type) |
 | `GET /accounts/validate` | HTMX — validates account name, returns HTML feedback |
-| `GET /accounts/datalist` | Returns `<datalist>` HTML for account autocomplete |
+| `GET /accounts/datalist` | Returns `<datalist>` HTML for account autocomplete (all account types) |
 | `GET /db/browse` | Opens native Windows file picker (tkinter subprocess), returns `{"path": "..."}` |
 | `POST /db/set-path` | Validates path, writes new `GNUCASH_DB_PATH` to `config.py`, reloads config, redirects to `/` |
 
@@ -162,7 +163,7 @@ Web-based configuration interface for user-modifiable settings:
 - **Fuzzy Matching** — match and ambiguous thresholds
 - **Reset** — restore all settings to config.py defaults
 
-**Live validation**: Cash-on-hand account field validates against GnuCash chart of accounts as you type (300ms debounce). Autocomplete suggests asset accounts but accepts any valid account name.
+**Live validation**: Cash-on-hand account field validates against GnuCash chart of accounts as you type (300ms debounce). Autocomplete shows all non-placeholder accounts from the database and accepts any valid account name.
 
 ### Vendor Data Model
 
