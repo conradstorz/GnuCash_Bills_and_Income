@@ -140,9 +140,9 @@ The dashboard uses a split-screen layout: bills panel (left) and cash entry pane
 | Route | Purpose |
 |---|---|
 | `GET /cash/add-row` | HTMX — append a new cash entry row |
-| `GET /clients/datalist` | Returns `<datalist>` HTML for client autocomplete |
-| `GET /clients/search` | JSON client name search |
-| `POST /cash/submit` | Validates and posts cash batch to GnuCash |
+| `GET /clients/datalist` | Returns `<datalist>` HTML for memo autocomplete (usage-based) |
+| `GET /clients/search` | JSON memo suggestions based on history |
+| `POST /cash/submit` | Validates and posts cash batch to GnuCash; saves memos to history |
 | `GET /accounts/asset` | JSON list of all asset account names |
 | `GET /accounts/all` | JSON list of all account names (any type) |
 | `GET /accounts/validate` | HTMX — validates account name, returns HTML feedback |
@@ -151,8 +151,29 @@ The dashboard uses a split-screen layout: bills panel (left) and cash entry pane
 | `POST /db/set-path` | Validates path, writes new `GNUCASH_DB_PATH` to `config.py`, reloads config, redirects to `/` |
 
 **Cash-related data files:**
-- `data/clients.json` — flat list of 15–45 client names for autocomplete; edit manually
+- `data/clients.json` — flat list of 15–45 client names for autocomplete; edit manually (DEPRECATED: now uses memo_history.json)
 - `data/cash_accounts.json` — 5–10 income/asset accounts for the account dropdown; each entry needs `name` and `guid`
+- `data/memo_history.json` — auto-generated usage history for memo autocomplete; tracks count and last_used timestamp
+
+### Memo Autocomplete (Smart Learning)
+
+The cash entry memo field uses a **usage-based autocomplete** system that learns from actual data entry:
+
+**How it works:**
+- Every memo saved via `/cash/submit` is recorded in `data/memo_history.json`
+- Each memo tracks: `count` (usage frequency) and `last_used` (ISO timestamp)
+- Autocomplete suggestions are ranked: **prefix match > substring match > usage count**
+- Empty query shows top 50 most frequently used memos
+
+**Implementation** (`web/cash_io.py`):
+- `save_memo_to_history(memo)` — increments count, updates timestamp
+- `get_memo_suggestions(query, limit)` — returns ranked suggestions
+- `read_memo_history()` — loads memo data from JSON
+
+**Benefits:**
+- No manual client list maintenance required
+- Automatically adapts to most common entries
+- Better suggestions over time as usage patterns emerge
 
 ### Settings Page (`/settings`)
 
