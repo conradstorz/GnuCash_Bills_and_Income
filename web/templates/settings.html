@@ -40,18 +40,35 @@
     <h3>Cash-on-Hand Account</h3>
     <p class="help-text">The account where cash receipts are recorded (typically an asset account like "Cash-on-hand").</p>
     
-    <form method="post" action="/settings/cash-on-hand-account">
+    <!-- Datalist for autocomplete (loaded via HTMX) -->
+    <datalist id="account-list"
+              hx-get="/accounts/datalist"
+              hx-trigger="load"
+              hx-swap="outerHTML">
+    </datalist>
+    
+    <form method="post" action="/settings/cash-on-hand-account" id="cash-on-hand-form">
       <div class="form-group">
         <label for="cash_on_hand_account">Account Name:</label>
-        <input type="text" 
-               id="cash_on_hand_account" 
-               name="cash_on_hand_account" 
-               value="{{ current_cash_on_hand }}"
-               required
-               class="form-control">
-        <small class="help-text">Enter the exact name as it appears in your GnuCash chart of accounts.</small>
+        <div class="input-with-validation">
+          <input type="text" 
+                 id="cash_on_hand_account" 
+                 name="cash_on_hand_account" 
+                 value="{{ current_cash_on_hand }}"
+                 list="account-list"
+                 required
+                 autocomplete="off"
+                 class="form-control"
+                 hx-get="/accounts/validate"
+                 hx-trigger="keyup changed delay:300ms"
+                 hx-target="#validation-feedback"
+                 hx-include="[name='cash_on_hand_account']"
+                 hx-vals='js:{name: document.getElementById("cash_on_hand_account").value}'>
+          <span id="validation-feedback" class="validation-feedback"></span>
+        </div>
+        <small class="help-text">Start typing to see suggestions from your GnuCash chart of accounts.</small>
       </div>
-      <button type="submit" class="btn-primary">Update Cash-on-Hand Account</button>
+      <button type="submit" class="btn-primary" id="submit-cash-account">Update Cash-on-Hand Account</button>
     </form>
   </section>
 
@@ -342,6 +359,62 @@
   margin-top: 32px;
   padding-top: 20px;
   border-top: 1px solid #dee2e6;
+}
+
+/* Live Validation Styles */
+.input-with-validation {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.validation-feedback {
+  font-size: 0.9em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 150px;
+}
+
+.validation-feedback.valid {
+  color: #28a745;
+}
+
+.validation-feedback.valid::before {
+  content: "✓";
+  font-weight: bold;
+  font-size: 1.2em;
+}
+
+.validation-feedback.invalid {
+  color: #dc3545;
+}
+
+.validation-feedback.invalid::before {
+  content: "✗";
+  font-weight: bold;
+  font-size: 1.2em;
+}
+
+.validation-feedback.warning {
+  color: #ffc107;
+}
+
+.validation-feedback.warning::before {
+  content: "⚠";
+  font-weight: bold;
+  font-size: 1.2em;
+}
+
+.validation-feedback.checking {
+  color: #6c757d;
+}
+
+.validation-feedback.checking::before {
+  content: "⋯";
+  font-weight: bold;
+  font-size: 1.2em;
 }
 </style>
 {% endblock %}

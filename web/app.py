@@ -468,6 +468,64 @@ async def clients_search(memo: str = ""):
     return search_clients(memo)
 
 
+@app.get("/accounts/asset")
+async def accounts_asset_list():
+    """Return list of all asset account names for autocomplete."""
+    from bill_processor import gnucash_db
+    accounts = gnucash_db.get_asset_accounts()
+    return {"accounts": [acc["name"] for acc in accounts]}
+
+
+@app.get("/accounts/validate")
+async def accounts_validate(request: Request, name: str = ""):
+    """Validate if an account name exists in GnuCash and return HTML feedback."""
+    if not name or not name.strip():
+        return templates.TemplateResponse(
+            request,
+            "partials/account_validation.html",
+            {"valid": False, "message": "Enter an account name"}
+        )
+    
+    from bill_processor import gnucash_db
+    account = gnucash_db.get_account_by_name(name.strip())
+    
+    if account:
+        # Check if it's an asset account (recommended for cash-on-hand)
+        if account.get("account_type") == config.ACCOUNT_TYPE_ASSET:
+            return templates.TemplateResponse(
+                request,
+                "partials/account_validation.html",
+                {"valid": True, "message": "Valid asset account"}
+            )
+        else:
+            return templates.TemplateResponse(
+                request,
+                "partials/account_validation.html",
+                {
+                    "valid": True,
+                    "message": "Account found",
+                    "warning": "Not an asset account - typically cash-on-hand should be an asset account"
+                }
+            )
+    else:
+        return templates.TemplateResponse(
+            request,
+            "partials/account_validation.html",
+            {"valid": False, "message": "Account not found in GnuCash"}
+        )
+
+
+@app.get("/accounts/datalist")
+async def accounts_datalist():
+    """Return a populated <datalist> element for account name autocomplete."""
+    from bill_processor import gnucash_db
+    from fastapi.responses import HTMLResponse
+    accounts = gnucash_db.get_asset_accounts()
+    options = "".join(f'<option value="{acc["name"]}">' for acc in accounts)
+    datalist_html = f'<datalist id="account-list">{options}</datalist>'
+    return HTMLResponse(content=datalist_html)
+
+
 @app.post("/cash/submit")
 async def cash_submit(request: Request):
     """Process the cash entry form: create batch transaction + optional deposit."""

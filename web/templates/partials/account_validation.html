@@ -1,0 +1,8 @@
+{% if valid %}
+  <span class="validation-feedback valid">{{ message }}</span>
+{% else %}
+  <span class="validation-feedback invalid">{{ message }}</span>
+{% endif %}
+{% if warning %}
+  <span class="validation-feedback warning">{{ warning }}</span>
+{% endif %}
