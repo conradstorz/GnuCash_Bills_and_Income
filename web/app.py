@@ -490,28 +490,16 @@ async def accounts_validate(request: Request, name: str = ""):
     account = gnucash_db.get_account_by_name(name.strip())
     
     if account:
-        # Check if it's an asset account (recommended for cash-on-hand)
-        if account.get("account_type") == config.ACCOUNT_TYPE_ASSET:
-            return templates.TemplateResponse(
-                request,
-                "partials/account_validation.html",
-                {"valid": True, "message": "Valid asset account"}
-            )
-        else:
-            return templates.TemplateResponse(
-                request,
-                "partials/account_validation.html",
-                {
-                    "valid": True,
-                    "message": "Account found",
-                    "warning": "Not an asset account - typically cash-on-hand should be an asset account"
-                }
-            )
+        return templates.TemplateResponse(
+            request,
+            "partials/account_validation.html",
+            {"valid": True, "message": "Account found"}
+        )
     else:
         return templates.TemplateResponse(
             request,
             "partials/account_validation.html",
-            {"valid": False, "message": "Account not found in GnuCash"}
+            {"valid": False, "message": "Account not found"}
         )
 
 
