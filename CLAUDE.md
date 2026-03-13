@@ -143,12 +143,26 @@ The dashboard uses a split-screen layout: bills panel (left) and cash entry pane
 | `GET /clients/datalist` | Returns `<datalist>` HTML for client autocomplete |
 | `GET /clients/search` | JSON client name search |
 | `POST /cash/submit` | Validates and posts cash batch to GnuCash |
+| `GET /accounts/asset` | JSON list of all asset account names |
+| `GET /accounts/validate` | HTMX — validates account name, returns HTML feedback |
+| `GET /accounts/datalist` | Returns `<datalist>` HTML for account autocomplete |
 | `GET /db/browse` | Opens native Windows file picker (tkinter subprocess), returns `{"path": "..."}` |
 | `POST /db/set-path` | Validates path, writes new `GNUCASH_DB_PATH` to `config.py`, reloads config, redirects to `/` |
 
 **Cash-related data files:**
 - `data/clients.json` — flat list of 15–45 client names for autocomplete; edit manually
 - `data/cash_accounts.json` — 5–10 income/asset accounts for the account dropdown; each entry needs `name` and `guid`
+
+### Settings Page (`/settings`)
+
+Web-based configuration interface for user-modifiable settings:
+- **Cash Entry Accounts** — checkbox grid to enable/disable accounts in cash entry dropdown
+- **Cash-on-Hand Account** — text input with live validation (HTMX autocomplete, validates account exists in GnuCash)
+- **Locality Settings** — city, state, coordinates, search radius
+- **Fuzzy Matching** — match and ambiguous thresholds
+- **Reset** — restore all settings to config.py defaults
+
+**Live validation**: Cash-on-hand account field validates against GnuCash chart of accounts as you type (300ms debounce). Autocomplete suggests asset accounts but accepts any valid account name.
 
 ### Vendor Data Model
 
