@@ -476,6 +476,14 @@ async def accounts_asset_list():
     return {"accounts": [acc["name"] for acc in accounts]}
 
 
+@app.get("/accounts/all")
+async def accounts_all_list():
+    """Return list of all account names for autocomplete."""
+    from bill_processor import gnucash_db
+    accounts = gnucash_db.get_all_accounts()
+    return {"accounts": [acc["name"] for acc in accounts]}
+
+
 @app.get("/accounts/validate")
 async def accounts_validate(request: Request, name: str = ""):
     """Validate if an account name exists in GnuCash and return HTML feedback."""
@@ -508,7 +516,7 @@ async def accounts_datalist():
     """Return a populated <datalist> element for account name autocomplete."""
     from bill_processor import gnucash_db
     from fastapi.responses import HTMLResponse
-    accounts = gnucash_db.get_asset_accounts()
+    accounts = gnucash_db.get_all_accounts()
     options = "".join(f'<option value="{acc["name"]}">' for acc in accounts)
     datalist_html = f'<datalist id="account-list">{options}</datalist>'
     return HTMLResponse(content=datalist_html)

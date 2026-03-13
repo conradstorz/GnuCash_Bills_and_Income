@@ -1685,6 +1685,22 @@ def get_asset_accounts() -> List[Dict]:
         return [dict(row) for row in cursor]
 
 
+def get_all_accounts() -> List[Dict]:
+    """
+    Get all non-placeholder accounts of any type.
+    Used for general account selection and autocomplete.
+    
+    Returns list of dicts with: guid, name, description, account_type
+    """
+    with get_connection() as conn:
+        cursor = conn.execute("""
+            SELECT guid, name, description, account_type FROM accounts 
+            WHERE placeholder = ?
+            ORDER BY name
+        """, (config.PLACEHOLDER_FALSE,))
+        return [dict(row) for row in cursor]
+
+
 def get_invoice_by_guid(invoice_guid: str) -> Optional[Dict]:
     """Get an invoice/bill record by GUID."""
     with get_connection() as conn:
