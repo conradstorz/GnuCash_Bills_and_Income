@@ -8,14 +8,6 @@
     </select>
   </td>
   <td>
-    <input type="text"
-           name="memo"
-           placeholder="Client name"
-           autocomplete="off"
-           list="client-list"
-           required>
-  </td>
-  <td>
     <input type="number"
            name="amount"
            step="0.01"
@@ -26,6 +18,17 @@
   </td>
   <td>
     <button type="button"
-            onclick="this.closest('tr').remove(); updateSamuseTotal()">&#x2715;</button>
+            onclick="const row = this.closest('tr'); const memoRow = row.nextElementSibling; row.remove(); if (memoRow && memoRow.classList.contains('memo-row')) memoRow.remove(); updateSamuseTotal()">&#x2715;</button>
+  </td>
+</tr>
+<tr class="memo-row">
+  <td colspan="3">
+    <input type="text"
+           name="memo"
+           placeholder="Memo (who paid)"
+           autocomplete="off"
+           list="client-list"
+           style="width: 100%;"
+           required>
   </td>
 </tr>

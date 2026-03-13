@@ -60,3 +60,16 @@ td { padding: 0.35rem 0.6rem; border-bottom: 1px solid #eee; }
   margin-top: 1rem;
   text-align: right;
 }
+
+/* Cash entry row styling */
+.memo-row td {
+  padding-top: 0.2rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #ddd;
+}
+
+.memo-row input {
+  font-size: 0.9rem;
+  font-style: italic;
+  color: #555;
+}
