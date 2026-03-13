@@ -452,20 +452,21 @@ async def cash_add_row(request: Request):
 
 @app.get("/clients/datalist")
 async def clients_datalist(request: Request):
-    """Return a populated <datalist> element for client autocomplete."""
-    from bill_processor.web.cash_io import read_clients
-    clients = read_clients()
-    options = "".join(f'<option value="{c}">' for c in clients)
-    datalist_html = f'<datalist id="client-list">{options}</datalist>'
+    """Return a populated <datalist> element for memo autocomplete based on usage history."""
+    from bill_processor.web.cash_io import get_memo_suggestions
     from fastapi.responses import HTMLResponse
+    # Get top 50 most used memos
+    memos = get_memo_suggestions("", limit=50)
+    options = "".join(f'<option value="{m}">' for m in memos)
+    datalist_html = f'<datalist id="client-list">{options}</datalist>'
     return HTMLResponse(content=datalist_html)
 
 
 @app.get("/clients/search")
 async def clients_search(memo: str = ""):
-    """Return autocomplete suggestions as JSON."""
-    from bill_processor.web.cash_io import search_clients
-    return search_clients(memo)
+    """Return memo autocomplete suggestions based on usage history."""
+    from bill_processor.web.cash_io import get_memo_suggestions
+    return {"suggestions": get_memo_suggestions(memo)}
 
 
 @app.get("/accounts/asset")
@@ -582,6 +583,10 @@ async def cash_submit(request: Request):
             line_items=line_items,
             description="Cash receipt",
         )
+        # Save memos to history for autocomplete
+        from bill_processor.web.cash_io import save_memo_to_history
+        for item in line_items:
+            save_memo_to_history(item["memo"])
     except Exception as exc:
         return _render_panel(error=str(exc))
 

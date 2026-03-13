@@ -57,6 +57,7 @@ VENDOR_DB_PATH = PROJECT_ROOT / "data" / "vendor_database.json"
 VENDOR_DATABASE_PATH = VENDOR_DB_PATH  # Alias for compatibility
 CLIENTS_PATH = PROJECT_ROOT / "data" / "clients.json"
 CASH_ACCOUNTS_PATH = PROJECT_ROOT / "data" / "cash_accounts.json"
+MEMO_HISTORY_PATH = PROJECT_ROOT / "data" / "memo_history.json"
 BILLS_INPUT_PATH = PROJECT_ROOT / "data" / "bills_to_process.txt"
 DEFAULT_INPUT_FILE = BILLS_INPUT_PATH  # Alias for compatibility
 

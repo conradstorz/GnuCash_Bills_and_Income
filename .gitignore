@@ -27,6 +27,7 @@ htmlcov/
 data/vendor_database.json
 data/clients.json
 data/cash_accounts.json
+data/memo_history.json
 data/bills_to_process.txt
 data/gnucash_schema.json
 data/user_settings.json
