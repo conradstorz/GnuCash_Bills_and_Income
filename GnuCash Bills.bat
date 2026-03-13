@@ -1,36 +1,34 @@
 @echo off
 title GnuCash Bills - Starting...
-
-REM Check if server is already running on port 7432
-netstat -ano | findstr ":7432" | findstr "LISTENING" >nul 2>&1
-
+echo Checking if GnuCash Bills server is already running on port 7432...
+netstat -ano | findstr :7432 | findstr LISTENING >nul 2>&1
 if %errorlevel% equ 0 (
-    echo Server is already running on port 7432
-    echo Opening browser to existing server...
+    echo Server is already running. Opening browser...
     start http://localhost:7432
-    echo.
-    echo If the page doesn't load, close any existing server windows and try again.
-    timeout /t 3 /nobreak >nul
+    echo Done.
+    timeout /t 2 /nobreak >nul
     exit /b 0
 )
 
 echo Starting GnuCash Bills server on port 7432...
-start /min "GnuCash Bills Server" cmd /k "cd /d D:\Users\Conrad\Documents\programming\GnuCash_bills_and_collections && uv run uvicorn bill_processor.web.app:app --port 7432"
+start "GnuCash Bills Server" cmd /c "cd /d D:\Users\Conrad\Documents\programming\GnuCash_bills_and_collections && uv run uvicorn bill_processor.web.app:app --port 7432 & echo. & echo Server stopped. Closing window in 3 seconds... & timeout /t 3 /nobreak >nul"
 echo Waiting for server to start...
 timeout /t 3 /nobreak >nul
 
-REM Verify server actually started
-netstat -ano | findstr ":7432" | findstr "LISTENING" >nul 2>&1
-
-if %errorlevel% equ 0 (
-    echo Server started successfully!
-    echo Opening browser...
-    start http://localhost:7432
-    echo Done. Server is running in the background (minimized in taskbar).
-    echo Close the minimized console window to stop the server.
-) else (
-    echo ERROR: Server failed to start!
-    echo Check the minimized window for error messages.
+echo Verifying server started...
+netstat -ano | findstr :7432 | findstr LISTENING >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ERROR: Server failed to start on port 7432.
+    echo Check the server console window for errors.
+    pause
+    exit /b 1
 )
 
-timeout /t 3 /nobreak >nul
+echo Opening browser...
+start http://localhost:7432
+echo.
+echo SUCCESS: Server is running in a separate console window.
+echo Close the server console window to stop the application.
+echo.
+echo This window will close automatically in 20 seconds...
+timeout /t 20 >nul

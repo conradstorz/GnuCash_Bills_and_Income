@@ -19,6 +19,7 @@ from loguru import logger
 
 from bill_processor import gnucash_db
 from bill_processor import config
+from bill_processor import logging_setup
 from bill_processor.settings_manager import settings
 import bill_processor.address_lookup as addr_lookup
 from bill_processor.utils import parse_input_line, fuzzy_match_vendor, strip_vendor_name
@@ -33,6 +34,14 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 app = FastAPI(title="GnuCash Bill Processor")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+# Initialize logging on application startup
+@app.on_event("startup")
+async def startup_event():
+    logging_setup.setup_logging(module_name="web")
+    logger.info("GnuCash Bills web application starting")
+    logger.info(f"Database: {settings.gnucash_db_path}")
+    logger.info(f"Server running on http://127.0.0.1:7432")
 
 VENDOR_SEARCH_MIN_SCORE = 40  # Lower threshold for dropdown suggestions
 
