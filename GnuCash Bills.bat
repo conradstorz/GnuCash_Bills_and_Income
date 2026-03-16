@@ -13,16 +13,20 @@ if %errorlevel% equ 0 (
 echo Starting GnuCash Bills server on port 7432...
 start "GnuCash Bills Server" cmd /c "cd /d D:\Users\Conrad\Documents\programming\GnuCash_bills_and_collections && uv run uvicorn bill_processor.web.app:app --port 7432 & echo. & echo Server stopped. Closing window in 3 seconds... & timeout /t 3 /nobreak >nul"
 echo Waiting for server to start...
-timeout /t 3 /nobreak >nul
-
-echo Verifying server started...
+set /a attempts=0
+:wait_loop
+timeout /t 1 /nobreak >nul
+set /a attempts+=1
 netstat -ano | findstr :7432 | findstr LISTENING >nul 2>&1
-if %errorlevel% neq 0 (
-    echo ERROR: Server failed to start on port 7432.
-    echo Check the server console window for errors.
-    pause
-    exit /b 1
-)
+if %errorlevel% equ 0 goto server_ready
+if %attempts% lss 15 goto wait_loop
+
+echo ERROR: Server failed to start on port 7432 after 15 seconds.
+echo Check the server console window for errors.
+pause
+exit /b 1
+
+:server_ready
 
 echo Opening browser...
 start http://localhost:7432
