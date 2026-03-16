@@ -1518,7 +1518,7 @@ def create_cash_entry(
             "INSERT INTO splits (guid, tx_guid, account_guid, memo, action, "
             "reconcile_state, reconcile_date, "
             "value_num, value_denom, quantity_num, quantity_denom, lot_guid) "
-            "VALUES (?, ?, ?, ?, '', 'n', '', ?, 100, ?, 100, NULL)",
+            "VALUES (?, ?, ?, ?, '', 'n', NULL, ?, 100, ?, 100, NULL)",
             (samuse_split_guid, txn_guid, samuse_guid, description, total_cents, total_cents),
         )
         # One split per line item
@@ -1530,7 +1530,7 @@ def create_cash_entry(
                 "INSERT INTO splits (guid, tx_guid, account_guid, memo, action, "
                 "reconcile_state, reconcile_date, "
                 "value_num, value_denom, quantity_num, quantity_denom, lot_guid) "
-                "VALUES (?, ?, ?, ?, '', 'n', '', ?, 100, ?, 100, NULL)",
+                "VALUES (?, ?, ?, ?, '', 'n', NULL, ?, 100, ?, 100, NULL)",
                 (split_guid, txn_guid, item["account_guid"], item["memo"], cents, cents),
             )
         conn.commit()
@@ -1591,7 +1591,7 @@ def create_cash_deposit(
             "INSERT INTO splits (guid, tx_guid, account_guid, memo, action, "
             "reconcile_state, reconcile_date, "
             "value_num, value_denom, quantity_num, quantity_denom, lot_guid) "
-            "VALUES (?, ?, ?, ?, '', 'n', '', ?, 100, ?, 100, NULL)",
+            "VALUES (?, ?, ?, ?, '', 'n', NULL, ?, 100, ?, 100, NULL)",
             (samuse_split_guid, txn_guid, samuse_guid, memo, -amount_cents, -amount_cents),
         )
         # Bank: cash arriving (positive)
@@ -1599,7 +1599,7 @@ def create_cash_deposit(
             "INSERT INTO splits (guid, tx_guid, account_guid, memo, action, "
             "reconcile_state, reconcile_date, "
             "value_num, value_denom, quantity_num, quantity_denom, lot_guid) "
-            "VALUES (?, ?, ?, ?, '', 'n', '', ?, 100, ?, 100, NULL)",
+            "VALUES (?, ?, ?, ?, '', 'n', NULL, ?, 100, ?, 100, NULL)",
             (bank_split_guid, txn_guid, bank_account_guid, memo, amount_cents, amount_cents),
         )
         conn.commit()
@@ -2059,7 +2059,7 @@ def post_bill(
                     reconcile_state, reconcile_date,
                     value_num, value_denom, quantity_num, quantity_denom,
                     lot_guid
-                ) VALUES (?, ?, ?, '', 'Bill', 'n', '', ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, '', 'Bill', 'n', NULL, ?, ?, ?, ?, ?)
             """, (
                 split_ap_guid, txn_guid, ap_account_guid,
                 -amount_num, amount_denom, -amount_num, amount_denom,
@@ -2073,7 +2073,7 @@ def post_bill(
                     reconcile_state, reconcile_date,
                     value_num, value_denom, quantity_num, quantity_denom,
                     lot_guid
-                ) VALUES (?, ?, ?, '', 'Bill', 'n', '', ?, ?, ?, ?, NULL)
+                ) VALUES (?, ?, ?, '', 'Bill', 'n', NULL, ?, ?, ?, ?, NULL)
             """, (
                 split_expense_guid, txn_guid, expense_account_guid,
                 amount_num, amount_denom, amount_num, amount_denom
@@ -2274,7 +2274,7 @@ def pay_bill(
                     reconcile_state, reconcile_date,
                     value_num, value_denom, quantity_num, quantity_denom,
                     lot_guid
-                ) VALUES (?, ?, ?, ?, 'Payment', 'n', '', ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, 'Payment', 'n', NULL, ?, ?, ?, ?, ?)
             """, (
                 split_ap_guid, payment_txn_guid, ap_account_guid, memo,
                 amount_num, amount_denom, amount_num, amount_denom,
@@ -2288,7 +2288,7 @@ def pay_bill(
                     reconcile_state, reconcile_date,
                     value_num, value_denom, quantity_num, quantity_denom,
                     lot_guid
-                ) VALUES (?, ?, ?, ?, 'Payment', 'n', '', ?, ?, ?, ?, NULL)
+                ) VALUES (?, ?, ?, ?, 'Payment', 'n', NULL, ?, ?, ?, ?, NULL)
             """, (
                 split_checking_guid, payment_txn_guid, checking_account_guid, memo,
                 -amount_num, amount_denom, -amount_num, amount_denom
@@ -2525,7 +2525,7 @@ def create_posted_bill_DEPRECATED(
                 reconcile_state, reconcile_date,
                 value_num, value_denom, quantity_num, quantity_denom,
                 lot_guid
-            ) VALUES (?, ?, ?, ?, 'Expense', 'n', '', ?, ?, ?, ?, NULL)
+            ) VALUES (?, ?, ?, ?, 'Expense', 'n', NULL, ?, ?, ?, ?, NULL)
         """, (
             split1_guid, txn_guid, expense_account_guid, memo,
             amount_num, amount_denom, amount_num, amount_denom
@@ -2538,7 +2538,7 @@ def create_posted_bill_DEPRECATED(
                 reconcile_state, reconcile_date,
                 value_num, value_denom, quantity_num, quantity_denom,
                 lot_guid
-            ) VALUES (?, ?, ?, ?, 'Bill', 'n', '', ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, 'Bill', 'n', NULL, ?, ?, ?, ?, ?)
         """, (
             split2_guid, txn_guid, ap_guid, memo,
             -amount_num, amount_denom, -amount_num, amount_denom,
