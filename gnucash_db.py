@@ -606,7 +606,7 @@ def get_connection(readonly: bool = True):
     
     # SQLite URI format for read-only
     if readonly:
-        uri = f"file:{db_path}?mode=ro"
+        uri = f"file:{db_path.as_posix()}?mode=ro"
         logger.debug(f"Opening read-only connection: {uri}")
         conn = sqlite3.connect(uri, uri=True)
     else:
