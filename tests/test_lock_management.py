@@ -167,3 +167,85 @@ class TestCleanStaleLock:
                    side_effect=sqlite3.OperationalError("disk full")):
             result = clean_stale_lock()
         assert result is False
+
+
+class TestAcquireLock:
+    def _get_gnclock_rows(self, db_path):
+        conn = sqlite3.connect(str(db_path))
+        rows = conn.execute("SELECT Hostname, PID FROM gnclock").fetchall()
+        conn.close()
+        return rows
+
+    def test_unlocked_db_acquires(self, lock_db):
+        assert acquire_lock() is True
+        rows = self._get_gnclock_rows(lock_db)
+        assert len(rows) == 1
+        assert rows[0][0] == _get_lock_hostname()
+        assert rows[0][1] == os.getpid()
+        release_lock()  # clean up
+
+    def test_already_locked_externally_returns_false(self, lock_db):
+        # Use BillProcessor@OTHER_MACHINE — clean_stale_lock() explicitly skips
+        # remote BillProcessor locks, so acquire_lock() will see it as still
+        # locked and return False.
+        _insert_lock(lock_db, "BillProcessor@OTHER_MACHINE", 1234)
+        assert acquire_lock() is False
+        rows = self._get_gnclock_rows(lock_db)
+        assert len(rows) == 1
+        assert rows[0][0] == "BillProcessor@OTHER_MACHINE"
+
+    def test_stale_lock_auto_cleaned_then_acquired(self, lock_db):
+        local_hostname = _get_lock_hostname()
+        _insert_lock(lock_db, local_hostname, 9999)  # stale lock from dead PID
+        with patch("bill_processor.gnucash_db._is_process_running", return_value=False):
+            assert acquire_lock() is True
+        rows = self._get_gnclock_rows(lock_db)
+        assert len(rows) == 1
+        assert rows[0][0] == local_hostname
+        assert rows[0][1] == os.getpid()
+        release_lock()
+
+    def test_db_error_on_insert_returns_false(self, lock_db):
+        # Read paths (is_gnucash_locked, clean_stale_lock) use uri=True.
+        # The INSERT write path uses a plain connect (no uri=True).
+        # Raise only on non-URI connects to avoid triggering a false early return
+        # from the lock-check reads.
+        real_connect = sqlite3.connect
+
+        def raise_on_write(*args, **kwargs):
+            if not kwargs.get("uri", False):
+                raise sqlite3.Error("simulated write failure")
+            return real_connect(*args, **kwargs)
+
+        with patch("bill_processor.gnucash_db.sqlite3.connect", side_effect=raise_on_write):
+            result = acquire_lock()
+        assert result is False
+
+
+class TestReleaseLock:
+    def _get_gnclock_rows(self, db_path):
+        conn = sqlite3.connect(str(db_path))
+        rows = conn.execute("SELECT Hostname, PID FROM gnclock").fetchall()
+        conn.close()
+        return rows
+
+    def test_releases_own_lock(self, lock_db):
+        # Use _insert_lock directly — keeps this test isolated from acquire_lock()
+        _insert_lock(lock_db, _get_lock_hostname(), os.getpid())
+        assert release_lock() is True
+        assert self._get_gnclock_rows(lock_db) == []
+
+    def test_no_lock_is_idempotent(self, lock_db):
+        assert release_lock() is True
+
+    def test_does_not_delete_others_lock(self, lock_db):
+        _insert_lock(lock_db, "GnuCash@OTHER", 1234)
+        assert release_lock() is True
+        rows = self._get_gnclock_rows(lock_db)
+        assert len(rows) == 1
+        assert rows[0][0] == "GnuCash@OTHER"
+
+    def test_db_error_returns_false(self, lock_db):
+        with patch("bill_processor.gnucash_db.sqlite3.connect",
+                   side_effect=sqlite3.Error("locked")):
+            assert release_lock() is False
