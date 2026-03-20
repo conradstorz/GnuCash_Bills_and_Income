@@ -353,3 +353,74 @@ class TestGetAllGnucashVendors:
             # Values must be empty strings, not None
             for key in required:
                 assert v[key] is not None
+
+
+class TestValidateVendorReferences:
+
+    def _write_json(self, sync_util, vendors_dict):
+        """Helper: write vendors_dict as a vendor_database.json file."""
+        sync_util.vendor_db_path.write_text(json.dumps({
+            "vendors": vendors_dict,
+            "aliases": {}
+        }))
+
+    def test_valid_reference(self, sync_util, db_connection):
+        guid = _insert_test_vendor(db_connection, "ValidRefVendor2026")
+        self._write_json(sync_util, {
+            "valid_vendor": {"display_name": "ValidRefVendor2026", "gnucash_guid": guid}
+        })
+        result = sync_util.validate_vendor_references(auto_fix=True)
+        assert "valid_vendor" in result["valid"]
+        assert "valid_vendor" not in result["invalid"]
+
+    def test_invalid_reference_auto_fix(self, sync_util, db_connection):
+        fake_guid = "deadbeef" + "0" * 24
+        self._write_json(sync_util, {
+            "stale_vendor": {"display_name": "StaleVendor", "gnucash_guid": fake_guid}
+        })
+        result = sync_util.validate_vendor_references(auto_fix=True)
+        assert "stale_vendor" in result["invalid"]
+        assert "stale_vendor" in result["fixed"]
+        # gnucash_guid removed from in-memory data
+        assert "gnucash_guid" not in sync_util.vendors_data.get("stale_vendor", {})
+        # File on disk updated
+        saved = json.loads(sync_util.vendor_db_path.read_text())
+        assert "gnucash_guid" not in saved["vendors"].get("stale_vendor", {})
+
+    def test_invalid_reference_no_auto_fix(self, sync_util, db_connection):
+        fake_guid = "deadbeef" + "0" * 24
+        self._write_json(sync_util, {
+            "stale_vendor": {"display_name": "StaleVendor", "gnucash_guid": fake_guid}
+        })
+        result = sync_util.validate_vendor_references(auto_fix=False)
+        assert "stale_vendor" in result["invalid"]
+        assert "stale_vendor" not in result["fixed"]
+        # vendors_data unchanged
+        assert sync_util.vendors_data["stale_vendor"]["gnucash_guid"] == fake_guid
+
+    def test_stale_expense_account_guid_cleaned(self, sync_util, db_connection):
+        guid = _insert_test_vendor(db_connection, "ExpenseAcctVendor2026")
+        stale_acct_guid = "deadacct" + "0" * 24
+        self._write_json(sync_util, {
+            "expense_vendor": {
+                "display_name": "ExpenseAcctVendor2026",
+                "gnucash_guid": guid,
+                "expense_account_guid": stale_acct_guid,
+            }
+        })
+        result = sync_util.validate_vendor_references(auto_fix=True)
+        # Vendor itself is valid (GUID exists in DB)
+        assert "expense_vendor" in result["valid"]
+        # Stale expense_account_guid was removed
+        assert "expense_vendor" in result["fixed"]
+        assert "expense_account_guid" not in sync_util.vendors_data["expense_vendor"]
+
+    def test_unsynced_vendor_skipped(self, sync_util, db_connection):
+        # Vendor has no gnucash_guid — not yet synced
+        self._write_json(sync_util, {
+            "unsynced": {"display_name": "UnsyncedVendor"}
+        })
+        result = sync_util.validate_vendor_references(auto_fix=True)
+        assert "unsynced" not in result["valid"]
+        assert "unsynced" not in result["invalid"]
+        assert "unsynced" not in result["fixed"]
