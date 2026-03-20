@@ -188,9 +188,13 @@ from `tests/helpers.py`, and from `bill_processor.gnucash_db`:
 
 #### `TestGetBillsByStatus` (4 tests)
 
+`get_bills_by_status` uses an INNER JOIN on the vendors table, so a matching vendor row
+must exist before inserting the invoice. Setup for all 4 tests: insert vendor first with
+`_insert_test_vendor`, then insert invoice with `_insert_test_invoice(vendor_guid=...)`.
+
 | Test | Setup | Assertion |
 |---|---|---|
-| `test_unposted_bill_appears` | insert unposted invoice (`post_lot=None`) | inserted GUID in `[b["guid"] for b in get_bills_by_status("unposted")]` |
+| `test_unposted_bill_appears` | insert vendor + unposted invoice (`post_lot=None`) | inserted GUID in `[b["guid"] for b in get_bills_by_status("unposted")]` |
 | `test_unposted_items_have_required_keys` | same | items have `guid`, `id` |
 | `test_all_includes_unposted` | same | inserted GUID in `get_bills_by_status("all")` |
 | `test_posted_unpaid_excludes_unposted` | same | inserted GUID NOT in `get_bills_by_status("posted_unpaid")` |
@@ -210,38 +214,41 @@ from `tests/helpers.py`, and from `bill_processor.gnucash_db`:
 
 ### `_insert_test_vendor` — move from `test_vendor_sync.py`
 
-Move the existing function verbatim. Update `test_vendor_sync.py` to import from
-`tests/helpers.py` instead of defining it locally. The module-level import in
-`test_vendor_sync.py` changes to:
+Move the existing function verbatim from `test_vendor_sync.py` (where it is currently
+defined locally, not via importlib). Update `test_vendor_sync.py` to import from
+`tests/helpers.py` instead:
 
 ```python
-from tests.helpers import _insert_test_vendor  # or via importlib like conftest
+from helpers import _insert_test_vendor
 ```
 
-Since `tests/helpers.py` is loaded via `importlib` in other files (not via normal import),
-keep the same `importlib.util` pattern in `test_vendor_bill_queries.py` and
-`test_vendor_sync.py` for consistency. Or add `tests/` to `pythonpath` in `pyproject.toml`
-to allow a direct `from helpers import ...`.
+Note: `conftest.py` currently uses `importlib.util` to load `_insert_lock` from a helper
+file — that pattern stays as-is. Only `test_vendor_sync.py` needs updating (replace the
+local function definition with the import above).
 
 **Recommended:** add `"tests"` to `pythonpath` in `pyproject.toml` so helpers can be
-imported directly without `importlib.util` boilerplate. Update all existing importlib
-patterns in `test_vendor_sync.py` and `conftest.py` accordingly.
+imported directly without `importlib.util` boilerplate. New files (`test_vendor_bill_queries.py`)
+use `from helpers import ...` directly.
 
 ### `_insert_test_invoice` — new helper
 
 ```python
-def _insert_test_invoice(db_path, vendor_guid, is_posted=0, invoice_id=None, guid=None):
+def _insert_test_invoice(db_path, vendor_guid, posted=False, invoice_id=None, guid=None):
     """Insert a minimal invoice (bill) row into the invoices table.
 
     Uses PRAGMA table_info to discover available columns. Returns inserted GUID.
-    is_posted=0 → unposted (post_lot left NULL); is_posted=1 → posted.
+    posted=False → unposted (post_lot left NULL); posted=True → set post_lot to a non-NULL
+    placeholder value to simulate a posted bill (the invoices table has no is_posted column;
+    posted/unposted state is determined entirely by whether post_lot is NULL).
     """
 ```
 
 Inserts into `invoices` table with:
 - `guid`, `id`, `date_opened` (`"2026-03-20 00:00:00"`), `owner_type=4` (vendor),
-  `owner_guid=vendor_guid`, `currency` (USD GUID from commodities), `is_posted`,
-  `post_lot=None` (when unposted)
+  `owner_guid=vendor_guid`, `currency` (USD GUID from commodities),
+  `post_lot=None` (when `posted=False`); `post_lot="placeholder"` when `posted=True`
+- **No `is_posted` column** — the invoices table does not have this column; posted state
+  is controlled exclusively by `post_lot` being NULL or non-NULL
 - Uses `PRAGMA table_info(invoices)` for schema compatibility
 - Returns the inserted GUID
 
