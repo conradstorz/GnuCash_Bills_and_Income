@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add ~22 tests across three new files to bring `gnucash_db.py` coverage from ~28% toward ~50%,
+Add 43 tests across three new files to bring `gnucash_db.py` coverage from ~28% toward ~50%,
 covering pure utility functions, account query functions, and vendor/bill query functions.
 
 ## Architecture
@@ -22,6 +22,11 @@ without a real DB connection, so format functions fall back to ISO format).
 
 **Imports:** `datetime`, `re`, `pytest`, and from `bill_processor.gnucash_db`:
 `generate_guid`, `format_gnucash_date`, `format_gnucash_timestamp`
+
+**Import convention:** Use `from bill_processor.gnucash_db import ...` throughout all three
+test files. This matches existing test files (e.g., `test_lock_management.py`,
+`test_bill_workflow.py`) and works because the package-dir mapping in `pyproject.toml`
+exposes `gnucash_db.py` as `bill_processor.gnucash_db`.
 
 ---
 
@@ -189,13 +194,20 @@ from `tests/helpers.py`, and from `bill_processor.gnucash_db`:
 #### `TestGetBillsByStatus` (4 tests)
 
 `get_bills_by_status` uses an INNER JOIN on the vendors table, so a matching vendor row
-must exist before inserting the invoice. Setup for all 4 tests: insert vendor first with
-`_insert_test_vendor`, then insert invoice with `_insert_test_invoice(vendor_guid=...)`.
+must exist before inserting the invoice. Use a class-level `setup_method` that inserts
+vendor + invoice once per test method (each call creates fresh rows with unique GUIDs,
+so accumulation across methods is harmless since assertions are GUID-targeted):
+
+```python
+def setup_method(self):
+    self.vendor_guid = _insert_test_vendor(db_path)
+    self.invoice_guid = _insert_test_invoice(db_path, vendor_guid=self.vendor_guid, posted=False)
+```
 
 | Test | Setup | Assertion |
 |---|---|---|
-| `test_unposted_bill_appears` | insert vendor + unposted invoice (`post_lot=None`) | inserted GUID in `[b["guid"] for b in get_bills_by_status("unposted")]` |
-| `test_unposted_items_have_required_keys` | same | items have `guid`, `id` |
+| `test_unposted_bill_appears` | `setup_method` inserts vendor + unposted invoice | inserted GUID in `[b["guid"] for b in get_bills_by_status("unposted")]` |
+| `test_unposted_items_have_required_keys` | same | items have `guid`, `id`, `vendor_name` |
 | `test_all_includes_unposted` | same | inserted GUID in `get_bills_by_status("all")` |
 | `test_posted_unpaid_excludes_unposted` | same | inserted GUID NOT in `get_bills_by_status("posted_unpaid")` |
 
@@ -222,9 +234,11 @@ defined locally, not via importlib). Update `test_vendor_sync.py` to import from
 from helpers import _insert_test_vendor
 ```
 
-Note: `conftest.py` currently uses `importlib.util` to load `_insert_lock` from a helper
-file — that pattern stays as-is. Only `test_vendor_sync.py` needs updating (replace the
-local function definition with the import above).
+Note: `tests/helpers.py` already exists and contains `_insert_lock` (loaded by
+`conftest.py` via `importlib.util`). `conftest.py` does not need changes — it only uses
+`_insert_lock`. This task adds `_insert_test_vendor` and `_insert_test_invoice` to
+`helpers.py`, growing it from 1 function to 3. Only `test_vendor_sync.py` needs updating
+(replace the local function definition with the import above).
 
 **Recommended:** add `"tests"` to `pythonpath` in `pyproject.toml` so helpers can be
 imported directly without `importlib.util` boilerplate. New files (`test_vendor_bill_queries.py`)
@@ -251,6 +265,24 @@ Inserts into `invoices` table with:
   is controlled exclusively by `post_lot` being NULL or non-NULL
 - Uses `PRAGMA table_info(invoices)` for schema compatibility
 - Returns the inserted GUID
+
+**Currency lookup** (mirrors `_insert_test_vendor`):
+```python
+cur = conn.execute(
+    "SELECT guid FROM commodities WHERE mnemonic='USD' AND namespace='CURRENCY' LIMIT 1"
+).fetchone()
+currency_guid = cur[0] if cur else "a" * 32
+```
+
+**`post_lot="placeholder"` behavior note:** When `posted=True`, the helper sets
+`post_lot` to a non-NULL string that does not match any real row in the `lots` table.
+`get_bills_by_status("posted_unpaid")` does `LEFT JOIN lots ON i.post_lot = l.guid` and
+checks `l.is_closed = 0 OR l.is_closed IS NULL`. Because the GUID is fake, the LEFT JOIN
+returns NULL for all lot columns, satisfying `l.is_closed IS NULL` — so such an invoice
+**will appear** in `posted_unpaid` results. This is intentional for test purposes: it
+avoids inserting a real lots row while still producing a detectable posted invoice. The
+current test suite does not include a `test_posted_bill_appears_in_posted_unpaid` test, so
+this side-effect does not cause false positives in the specified tests.
 
 ---
 
