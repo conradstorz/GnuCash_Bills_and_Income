@@ -94,3 +94,76 @@ class TestGetLockHostname:
 
     def test_contains_machine_name(self):
         assert socket.gethostname() in _get_lock_hostname()
+
+
+class TestIsProcessRunning:
+    def test_negative_pid_returns_false(self):
+        assert _is_process_running(-1) is False
+        assert _is_process_running(0) is False
+
+    def test_live_pid_returns_true(self):
+        # os.getpid() is guaranteed to be running (it's us)
+        assert _is_process_running(os.getpid()) is True
+
+    def test_dead_pid_returns_false(self):
+        # PID 999999 is almost certainly not running on any machine
+        # If this is flaky (PID exists), increase the value or skip
+        assert _is_process_running(999999) is False
+
+
+class TestCleanStaleLock:
+    def _row_count(self, db_path):
+        conn = sqlite3.connect(str(db_path))
+        count = conn.execute("SELECT COUNT(*) FROM gnclock").fetchone()[0]
+        conn.close()
+        return count
+
+    def test_no_lock_returns_false(self, lock_db):
+        assert clean_stale_lock() is False
+
+    def test_remote_billprocessor_lock_untouched(self, lock_db):
+        # BillProcessor@ on a different machine — cannot clean remotely
+        _insert_lock(lock_db, "BillProcessor@OTHER_MACHINE", 9999)
+        assert clean_stale_lock() is False
+        assert self._row_count(lock_db) == 1
+
+    def test_local_billprocessor_live_pid_untouched(self, lock_db):
+        local_hostname = _get_lock_hostname()
+        _insert_lock(lock_db, local_hostname, 9999)
+        with patch("bill_processor.gnucash_db._is_process_running", return_value=True):
+            assert clean_stale_lock() is False
+        assert self._row_count(lock_db) == 1
+
+    def test_local_billprocessor_dead_pid_cleaned(self, lock_db):
+        local_hostname = _get_lock_hostname()
+        _insert_lock(lock_db, local_hostname, 9999)
+        with patch("bill_processor.gnucash_db._is_process_running", return_value=False):
+            assert clean_stale_lock() is True
+        assert self._row_count(lock_db) == 0
+
+    def test_gnucash_lock_live_pid_untouched(self, lock_db):
+        # Raw GnuCash lock (no BillProcessor@ prefix) — falls through to PID check
+        _insert_lock(lock_db, "GnuCash@DESKTOP", 9999)
+        with patch("bill_processor.gnucash_db._is_process_running", return_value=True):
+            assert clean_stale_lock() is False
+        assert self._row_count(lock_db) == 1
+
+    def test_gnucash_lock_dead_pid_cleaned(self, lock_db):
+        # GnuCash crashed — dead PID, no BillProcessor@ prefix, so it gets cleaned
+        _insert_lock(lock_db, "GnuCash@DESKTOP", 9999)
+        with patch("bill_processor.gnucash_db._is_process_running", return_value=False):
+            assert clean_stale_lock() is True
+        assert self._row_count(lock_db) == 0
+
+    def test_db_error_on_delete_returns_false(self, lock_db):
+        local_hostname = _get_lock_hostname()
+        _insert_lock(lock_db, local_hostname, 9999)
+        # Patching sqlite3.connect to raise OperationalError means is_gnucash_locked()
+        # catches it and returns (True, "unknown", 0). clean_stale_lock() then proceeds
+        # to attempt the DELETE, hits the same error in its own connect call, and the
+        # except sqlite3.Error block returns False.
+        with patch("bill_processor.gnucash_db._is_process_running", return_value=False), \
+             patch("bill_processor.gnucash_db.sqlite3.connect",
+                   side_effect=sqlite3.OperationalError("disk full")):
+            result = clean_stale_lock()
+        assert result is False
