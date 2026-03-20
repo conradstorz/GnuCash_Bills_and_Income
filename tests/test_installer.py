@@ -322,10 +322,14 @@ class TestMain:
         assert str(tmp_path) in text
         assert str(fake_db) in text
 
-    def test_exits_gracefully_when_no_db_selected(self, tmp_path, caplog):
+    def test_exits_gracefully_when_no_db_selected(self, tmp_path, capfd):
+        # Uses capfd (not caplog): install.main() calls logger.remove() internally,
+        # which strips the pytest-loguru caplog handler before the log is emitted.
+        # capfd captures stderr at the fd level, bypassing loguru handler management.
         cfg = self._make_config(tmp_path)
         with patch.object(install, "search_for_gnucash", return_value=[]), \
              patch.object(install, "pick_gnucash_file", return_value=None), \
              patch.object(install.Path, "resolve", return_value=tmp_path):
             install.main(config_path=cfg, project_root=tmp_path)
-        assert "No database selected" in caplog.text or "Exiting" in caplog.text
+        captured = capfd.readouterr()
+        assert "No database selected" in captured.err or "Exiting" in captured.err

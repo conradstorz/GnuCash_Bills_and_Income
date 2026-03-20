@@ -50,7 +50,9 @@ uv run pytest tests/test_cash_io.py::TestMemoHistory::test_save_and_retrieve -v
 uv run pytest --cov=bill_processor tests/
 ```
 
-Test files: `test_bill_workflow`, `test_vendor_manager`, `test_web_app`, `test_cash_io`, `test_cash_web`, `test_cash_entry`, `test_db_health`, `test_db_health_web`, `test_get_cash_accounts`, `test_fuzzy_search`, `test_utils`, `test_address_lookup`, `test_settings_manager`, `test_installer`.
+**Test stack:** pytest + loguru + `pytest-loguru` (required for `caplog` to capture loguru records). Install with `uv sync` — declared in `[project.optional-dependencies] dev`.
+
+Test files: `test_bill_workflow`, `test_vendor_manager`, `test_web_app`, `test_cash_io`, `test_cash_web`, `test_cash_entry`, `test_db_health`, `test_db_health_web`, `test_get_cash_accounts`, `test_fuzzy_search`, `test_utils`, `test_address_lookup`, `test_settings_manager`, `test_installer`, `test_vendor_sync`, `test_lock_management`.
 
 ### Debugging with Columbo
 
