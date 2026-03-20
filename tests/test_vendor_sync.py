@@ -243,3 +243,113 @@ class TestSaveVendorDatabase:
         sync_util.vendor_db_path = tmp_path / "nonexistent_dir" / "vendor_database.json"
         sync_util.vendors_data = {"v1": {"display_name": "V1"}}
         assert sync_util.save_vendor_database() is False
+
+# ---------------------------------------------------------------------------
+# Helper — insert a vendor row directly into the test DB
+# ---------------------------------------------------------------------------
+
+def _insert_test_vendor(db_path, name, guid=None, vendor_id=None, **addr_fields):
+    """Insert a minimal vendor row into the SQLite DB at db_path.
+
+    Uses PRAGMA table_info to discover available columns so it works across
+    GnuCash schema versions. Returns the inserted GUID.
+    """
+    guid = guid or uuid.uuid4().hex
+    vendor_id = vendor_id or "099999"
+
+    conn = sqlite3.connect(str(db_path))
+    cur = conn.execute(
+        "SELECT guid FROM commodities WHERE mnemonic='USD' AND namespace='CURRENCY' LIMIT 1"
+    )
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise RuntimeError("USD commodity not found in test DB")
+    currency_guid = row[0]
+
+    # Discover available columns
+    cur = conn.execute("PRAGMA table_info(vendors)")
+    available = {r[1] for r in cur.fetchall()}
+
+    base = {
+        "guid": guid,
+        "id": vendor_id,
+        "name": name,
+        "currency": currency_guid,
+        "active": 1,
+        "tax_override": 0,
+        "notes": "",
+        "addr_name": addr_fields.get("addr_name", ""),
+        "addr_addr1": addr_fields.get("addr_addr1", ""),
+        "addr_addr2": addr_fields.get("addr_addr2", ""),
+        "addr_addr3": addr_fields.get("addr_addr3", ""),
+        "addr_addr4": addr_fields.get("addr_addr4", ""),
+        "addr_phone": addr_fields.get("addr_phone", ""),
+        "addr_fax": addr_fields.get("addr_fax", ""),
+        "addr_email": addr_fields.get("addr_email", ""),
+        "tax_inc": "",
+        # tax_table is excluded: it is a FK reference to the tax tables table.
+        # SQLite does not enforce FKs by default, but excluding is safer.
+    }
+
+    insert_data = {k: v for k, v in base.items() if k in available}
+    cols = ", ".join(insert_data.keys())
+    placeholders = ", ".join("?" * len(insert_data))
+    conn.execute(
+        f"INSERT INTO vendors ({cols}) VALUES ({placeholders})",
+        list(insert_data.values())
+    )
+    conn.commit()
+    conn.close()
+    return guid
+
+
+# ---------------------------------------------------------------------------
+# Layer 3 — DB queries (db_connection fixture)
+# ---------------------------------------------------------------------------
+
+class TestVendorExistsInGnucash:
+
+    def test_existing_vendor_found(self, sync_util, db_connection):
+        _insert_test_vendor(db_connection, "TestCorp2026")
+        result = sync_util.vendor_exists_in_gnucash("TestCorp2026")
+        assert result is not None
+        assert result["name"] == "TestCorp2026"
+        assert "guid" in result
+        assert "id" in result
+
+    def test_nonexistent_vendor_returns_none(self, sync_util, db_connection):
+        result = sync_util.vendor_exists_in_gnucash("VendorThatNeverExists99999")
+        assert result is None
+
+
+class TestGetNextVendorId:
+
+    def test_returns_max_plus_one(self, sync_util, db_connection):
+        # Insert with extreme ID to guarantee it is the MAX in the test DB
+        _insert_test_vendor(db_connection, "MaxIdVendor2026", vendor_id="999990")
+        result = sync_util.get_next_vendor_id()
+        assert result == "999991"
+
+
+class TestGetAllGnucashVendors:
+
+    def test_returns_vendors_list(self, db_connection):
+        _insert_test_vendor(db_connection, "ListTestVendor2026")
+        vendors = get_all_gnucash_vendors()
+        assert isinstance(vendors, list)
+        assert len(vendors) > 0
+        assert all("guid" in v and "name" in v for v in vendors)
+
+    def test_address_fields_present(self, db_connection):
+        _insert_test_vendor(db_connection, "AddrFieldVendor2026")
+        vendors = get_all_gnucash_vendors()
+        required = {
+            "addr_name", "addr_addr1", "addr_addr2", "addr_addr3", "addr_addr4",
+            "addr_phone", "addr_fax", "addr_email",
+        }
+        for v in vendors:
+            assert required.issubset(v.keys())
+            # Values must be empty strings, not None
+            for key in required:
+                assert v[key] is not None
