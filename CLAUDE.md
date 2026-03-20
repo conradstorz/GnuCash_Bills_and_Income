@@ -38,16 +38,19 @@ uv run python install.py
 
 ```bash
 # Run all tests
-python tests/run_tests.py
+uv run python tests/run_tests.py
 
-# Run specific test files
-pytest tests/test_bill_workflow.py -v
-pytest tests/test_vendor_manager.py -v
-pytest tests/test_web_app.py -v
+# Run a single test file
+uv run pytest tests/test_bill_workflow.py -v
+
+# Run a single test by name
+uv run pytest tests/test_cash_io.py::TestMemoHistory::test_save_and_retrieve -v
 
 # With coverage
-pytest --cov=bill_processor tests/
+uv run pytest --cov=bill_processor tests/
 ```
+
+Test files: `test_bill_workflow`, `test_vendor_manager`, `test_web_app`, `test_cash_io`, `test_cash_web`, `test_cash_entry`, `test_db_health`, `test_db_health_web`, `test_get_cash_accounts`, `test_fuzzy_search`, `test_utils`, `test_address_lookup`, `test_settings_manager`, `test_installer`.
 
 ### Debugging with Columbo
 
@@ -77,6 +80,8 @@ python columbo.py path/to/book.gnucash
 - CLI (`main.py`)
 - Tkinter GUIs (`bill_entry_gui.py`, `vendor_manager_gui.py`)
 - FastAPI + HTMX web app (`web/app.py`)
+
+**Package mapping note:** `pyproject.toml` maps the project root as the `bill_processor` package (`package-dir = {"bill_processor" = "."}`). So `gnucash_db.py` is `bill_processor.gnucash_db`, `web/app.py` is `bill_processor.web.app`, etc.
 
 ### Key Supporting Modules
 
@@ -120,6 +125,7 @@ python columbo.py path/to/book.gnucash
 
 - **`schema_discovery.py`** — Handles GnuCash version differences by detecting column names at runtime; caches results in `gnucash_schema.json`.
 - **`logging_setup.py`** — loguru-based logging; console=INFO, file=DEBUG at `logs/bill_processor.log`.
+- **`web/queue_io.py`** — CRUD operations on `bills_to_process.txt` for the web dashboard (read, add, delete, edit bill entries by line index).
 
 ### Cash-on-Hand Entry (web dashboard, right panel)
 
