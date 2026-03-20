@@ -299,10 +299,10 @@ def is_gnucash_locked() -> tuple[bool, str | None, int | None]:
     
     try:
         # Open in read-only mode to check lock
-        uri = f"file:{db_path}?mode=ro"
+        uri = f"file:{db_path.as_posix()}?mode=ro"
         conn = sqlite3.connect(uri, uri=True)
         cursor = conn.cursor()
-        
+
         # Check gnclock table for any records
         cursor.execute("SELECT Hostname, PID FROM gnclock")
         row = cursor.fetchone()
