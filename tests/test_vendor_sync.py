@@ -484,3 +484,129 @@ class TestCreateVendorInGnucash:
         vendor_data = {"display_name": "StatsVendor2026"}
         sync_util_with_schema.create_vendor_in_gnucash("stats_test", vendor_data)
         assert sync_util_with_schema.stats["created"] == 1
+
+
+class TestSyncAllVendors:
+
+    def _write_vendor_json(self, sync_util, vendors_dict):
+        sync_util.vendor_db_path.write_text(json.dumps({
+            "vendors": vendors_dict,
+            "aliases": {}
+        }))
+
+    def test_dry_run_no_insertions(self, sync_util_with_schema, db_connection):
+        self._write_vendor_json(sync_util_with_schema, {
+            "dry_run_v": {"display_name": "VendorDryRun2026"}
+        })
+        result = sync_util_with_schema.sync_all_vendors(dry_run=True)
+        assert result is True
+        conn = sqlite3.connect(str(db_connection))
+        count = conn.execute(
+            "SELECT COUNT(*) FROM vendors WHERE name = 'VendorDryRun2026'"
+        ).fetchone()[0]
+        conn.close()
+        assert count == 0
+
+    def test_creates_missing_vendor(self, sync_util_with_schema, db_connection):
+        self._write_vendor_json(sync_util_with_schema, {
+            "new_v": {"display_name": "VendorCreateTest2026"}
+        })
+        sync_util_with_schema.sync_all_vendors()
+        assert sync_util_with_schema.stats["created"] == 1
+        conn = sqlite3.connect(str(db_connection))
+        row = conn.execute(
+            "SELECT guid FROM vendors WHERE name = 'VendorCreateTest2026'"
+        ).fetchone()
+        conn.close()
+        assert row is not None
+
+    def test_skips_existing_vendor(self, sync_util_with_schema, db_connection):
+        # Insert vendor into DB first
+        _insert_test_vendor(db_connection, "VendorSkipTest2026")
+        # JSON already has a gnucash_guid → hits skipped branch
+        self._write_vendor_json(sync_util_with_schema, {
+            "skip_v": {
+                "display_name": "VendorSkipTest2026",
+                "gnucash_guid": "already_set_guid",
+            }
+        })
+        sync_util_with_schema.sync_all_vendors()
+        assert sync_util_with_schema.stats["skipped"] == 1
+        # Only one row with that name (no duplicate created)
+        conn = sqlite3.connect(str(db_connection))
+        count = conn.execute(
+            "SELECT COUNT(*) FROM vendors WHERE name = 'VendorSkipTest2026'"
+        ).fetchone()[0]
+        conn.close()
+        assert count == 1
+
+    def test_updates_json_ids_for_existing_vendor(self, sync_util_with_schema, db_connection):
+        # Insert vendor into DB and capture its GUID
+        real_guid = _insert_test_vendor(db_connection, "VendorUpdateJson2026")
+        # JSON has same display_name but no gnucash_guid → hits update_vendor_ids branch
+        self._write_vendor_json(sync_util_with_schema, {
+            "update_json_v": {"display_name": "VendorUpdateJson2026"}
+        })
+        sync_util_with_schema.sync_all_vendors()
+        assert sync_util_with_schema.vendors_data["update_json_v"]["gnucash_guid"] == real_guid
+
+
+class TestSyncGnucashToJson:
+
+    def _write_vendor_json(self, sync_util, vendors_dict):
+        sync_util.vendor_db_path.write_text(json.dumps({
+            "vendors": vendors_dict,
+            "aliases": {}
+        }))
+
+    def test_imports_new_vendor(self, sync_util_with_schema, db_connection):
+        # No JSON file — simulates fresh install
+        guid = _insert_test_vendor(db_connection, "NewFromGC2026")
+        result = sync_util_with_schema.sync_gnucash_to_json()
+        assert result is True
+        # JSON file was created
+        assert sync_util_with_schema.vendor_db_path.exists()
+        saved = json.loads(sync_util_with_schema.vendor_db_path.read_text())
+        # Find the entry whose gnucash_guid matches the inserted row
+        found = any(
+            v.get("gnucash_guid") == guid
+            for v in saved["vendors"].values()
+        )
+        assert found, "Inserted vendor GUID not found in saved JSON"
+
+    def test_updates_existing_by_guid(self, sync_util_with_schema, db_connection):
+        gc_guid = "gcguid" + "0" * 26
+        _insert_test_vendor(db_connection, "GCUpdatedName2026", guid=gc_guid)
+        # JSON has an entry with matching GUID but old display_name
+        self._write_vendor_json(sync_util_with_schema, {
+            "old_key": {"display_name": "OldName", "gnucash_guid": gc_guid}
+        })
+        sync_util_with_schema.sync_gnucash_to_json()
+        # display_name updated from GnuCash
+        assert sync_util_with_schema.vendors_data["old_key"]["display_name"] == "GCUpdatedName2026"
+
+    def test_preserves_expense_account_on_update(self, sync_util_with_schema, db_connection):
+        gc_guid = "gcguid" + "1" * 26
+        _insert_test_vendor(db_connection, "PreserveExpenseVendor2026", guid=gc_guid)
+        self._write_vendor_json(sync_util_with_schema, {
+            "expense_v": {
+                "display_name": "PreserveExpenseVendor2026",
+                "gnucash_guid": gc_guid,
+                "expense_account": "Utilities",
+                "expense_account_guid": "acctguid001",
+            }
+        })
+        sync_util_with_schema.sync_gnucash_to_json()
+        updated = sync_util_with_schema.vendors_data["expense_v"]
+        assert updated.get("expense_account") == "Utilities"
+        assert updated.get("expense_account_guid") == "acctguid001"
+
+    def test_fresh_install_no_json_file(self, sync_util_with_schema, db_connection):
+        # Confirm vendor_db_path does not exist (fresh install simulation)
+        assert not sync_util_with_schema.vendor_db_path.exists()
+        _insert_test_vendor(db_connection, "FreshInstallVendor2026")
+        result = sync_util_with_schema.sync_gnucash_to_json()
+        assert result is True
+        assert sync_util_with_schema.vendor_db_path.exists()
+        saved = json.loads(sync_util_with_schema.vendor_db_path.read_text())
+        assert len(saved["vendors"]) >= 1
