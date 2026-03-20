@@ -67,27 +67,32 @@ class TestValidateAndCleanupDuplicates:
 
     def test_single_duplicate_group(self, sync_util):
         sync_util.vendors_data = {
-            "a": {"display_name": "Alpha", "gnucash_guid": "shared_guid"},
+            "a": {"display_name": "Alpha", "gnucash_guid": "shared_guid"},  # inserted first → kept
             "b": {"display_name": "Beta",  "gnucash_guid": "shared_guid"},
             "c": {"display_name": "Gamma", "gnucash_guid": "shared_guid"},
         }
         result = sync_util.validate_and_cleanup_duplicates()
         assert result["duplicates_found"] == 2
         assert result["duplicates_removed"] == 2
+        # "a" was inserted first (dict insertion order, Python 3.7+) so it is kept
         assert "a" in sync_util.vendors_data
         assert "b" not in sync_util.vendors_data
         assert "c" not in sync_util.vendors_data
 
     def test_multiple_duplicate_groups(self, sync_util):
         sync_util.vendors_data = {
-            "a": {"display_name": "Alpha", "gnucash_guid": "guid_1"},
+            "a": {"display_name": "Alpha", "gnucash_guid": "guid_1"},  # first in group → kept
             "b": {"display_name": "Beta",  "gnucash_guid": "guid_1"},
-            "c": {"display_name": "Gamma", "gnucash_guid": "guid_2"},
+            "c": {"display_name": "Gamma", "gnucash_guid": "guid_2"},  # first in group → kept
             "d": {"display_name": "Delta", "gnucash_guid": "guid_2"},
         }
         result = sync_util.validate_and_cleanup_duplicates()
         assert result["duplicates_removed"] == 2
         assert len(sync_util.vendors_data) == 2
+        assert "a" in sync_util.vendors_data
+        assert "c" in sync_util.vendors_data
+        assert "b" not in sync_util.vendors_data
+        assert "d" not in sync_util.vendors_data
 
     def test_auto_fix_false_reports_only(self, sync_util):
         sync_util.vendors_data = {
