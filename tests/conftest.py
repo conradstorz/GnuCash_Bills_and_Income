@@ -4,9 +4,22 @@ import tempfile
 import shutil
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 from bill_processor.config import GNUCASH_DB_PATH
 from bill_processor import gnucash_db
+# Load helpers.py by absolute path to avoid ambiguity with a sibling project's
+# tests/helpers.py. Not registered in sys.modules — conftest only needs the
+# extracted function.
+import importlib.util as _ilu
+_helpers_spec = _ilu.spec_from_file_location(
+    "tests.helpers",
+    Path(__file__).parent / "helpers.py",
+)
+_helpers = _ilu.module_from_spec(_helpers_spec)
+_helpers_spec.loader.exec_module(_helpers)
+_insert_lock = _helpers._insert_lock
+del _ilu, _helpers_spec, _helpers
 
 
 @pytest.fixture(scope="class")
@@ -201,3 +214,34 @@ def cash_entry_data(db_connection, test_accounts):
             {"account_guid": bob_guid, "memo": "Bob", "amount": 30.00},
         ],
     }
+
+
+@pytest.fixture
+def lock_db(tmp_path):
+    """Minimal SQLite DB with only gnclock table; GNUCASH_DB_PATH patched to it.
+
+    Uses patch() rather than direct attribute mutation (the existing db_connection
+    fixture style) so the original value is automatically restored on test exit.
+    """
+    db = tmp_path / "test.gnucash"
+    conn = sqlite3.connect(str(db))
+    conn.execute("CREATE TABLE gnclock (Hostname TEXT, PID INTEGER)")
+    conn.commit()
+    conn.close()
+    with patch("bill_processor.config.GNUCASH_DB_PATH", db):
+        yield db
+
+
+@pytest.fixture
+def health_db(tmp_path):
+    """SQLite DB with gnclock + accounts tables for check_db_health tests."""
+    db = tmp_path / "test.gnucash"
+    conn = sqlite3.connect(str(db))
+    conn.execute("CREATE TABLE gnclock (Hostname TEXT, PID INTEGER)")
+    conn.execute("""CREATE TABLE accounts (
+        guid TEXT, name TEXT, account_type TEXT, placeholder INTEGER
+    )""")
+    conn.commit()
+    conn.close()
+    with patch("bill_processor.config.GNUCASH_DB_PATH", db):
+        yield db
