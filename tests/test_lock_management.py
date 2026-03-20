@@ -249,3 +249,43 @@ class TestReleaseLock:
         with patch("bill_processor.gnucash_db.sqlite3.connect",
                    side_effect=sqlite3.Error("locked")):
             assert release_lock() is False
+
+
+class TestDatabaseLockContextManager:
+    """Tests for the database_lock() context manager.
+
+    Known behavioral gap: if release_lock() raises inside the finally block,
+    that exception propagates and may mask any exception from the with-body.
+    This is not tested here — testing it would require mocking release_lock(),
+    which reintroduces the mock approach we're moving away from.
+    """
+
+    def _get_gnclock_rows(self, db_path):
+        conn = sqlite3.connect(str(db_path))
+        rows = conn.execute("SELECT Hostname, PID FROM gnclock").fetchall()
+        conn.close()
+        return rows
+
+    def test_lock_held_during_block(self, lock_db):
+        with database_lock():
+            rows = self._get_gnclock_rows(lock_db)
+            assert len(rows) == 1
+            assert rows[0][0] == _get_lock_hostname()
+            assert rows[0][1] == os.getpid()
+
+    def test_lock_released_after_normal_exit(self, lock_db):
+        with database_lock():
+            pass
+        assert self._get_gnclock_rows(lock_db) == []
+
+    def test_lock_released_after_exception(self, lock_db):
+        with pytest.raises(ValueError):
+            with database_lock():
+                raise ValueError("something went wrong")
+        assert self._get_gnclock_rows(lock_db) == []
+
+    def test_raises_runtime_error_if_already_locked(self, lock_db):
+        _insert_lock(lock_db, "BillProcessor@OTHER_MACHINE", 1234)
+        with pytest.raises(RuntimeError, match="database is in use"):
+            with database_lock():
+                pass  # pragma: no cover
