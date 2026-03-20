@@ -30,3 +30,4 @@ package-dir = {"bill_processor" = "."}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]

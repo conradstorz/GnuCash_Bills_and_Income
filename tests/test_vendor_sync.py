@@ -1,0 +1,167 @@
+"""Tests for vendor_sync.py — four layers from pure in-memory logic
+through full SchemaDiscovery integration against a real GnuCash DB copy.
+"""
+import json
+import sqlite3
+import uuid
+
+import pytest
+
+from vendor_sync import (
+    VendorSyncUtility,
+    get_all_gnucash_vendors,
+    validate_and_fix_vendor_references,
+)
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def sync_util(tmp_path):
+    """VendorSyncUtility with vendor_db_path monkey-patched to tmp_path.
+    Function-scoped: each test gets a fresh instance with zeroed stats.
+    """
+    util = VendorSyncUtility()
+    util.vendor_db_path = tmp_path / "vendor_database.json"
+    return util
+
+
+@pytest.fixture
+def sync_util_with_schema(sync_util, db_connection):
+    """sync_util with discover_schema() already called against the real test DB.
+
+    MUST remain function-scoped (inherits scope from sync_util) so every test
+    gets zeroed stats. The shared class-scoped DB accumulates rows — assertions
+    must query by specific GUIDs, not by table row count.
+
+    Pytest scoping note: a function-scoped fixture CAN depend on a class-scoped
+    fixture (db_connection). ScopeMismatch only occurs in the opposite direction
+    (wider scope requesting narrower scope). No error will be raised here.
+
+    db_connection patches bill_processor.config.GNUCASH_DB_PATH. vendor_sync.py
+    imports `from bill_processor import config`, so the same module object is
+    patched — discover_schema() and get_connection() use the test DB automatically.
+    """
+    result = sync_util.discover_schema()
+    assert result, "discover_schema() failed — test DB may be missing vendors table"
+    return sync_util
+
+
+# ---------------------------------------------------------------------------
+# Layer 1 — Pure in-memory (no DB, no files)
+# ---------------------------------------------------------------------------
+
+class TestValidateAndCleanupDuplicates:
+
+    def test_no_duplicates(self, sync_util):
+        sync_util.vendors_data = {
+            "a": {"display_name": "Alpha", "gnucash_guid": "guid_a"},
+            "b": {"display_name": "Beta",  "gnucash_guid": "guid_b"},
+            "c": {"display_name": "Gamma", "gnucash_guid": "guid_c"},
+        }
+        result = sync_util.validate_and_cleanup_duplicates()
+        assert result["duplicates_found"] == 0
+        assert result["duplicates_removed"] == 0
+
+    def test_single_duplicate_group(self, sync_util):
+        sync_util.vendors_data = {
+            "a": {"display_name": "Alpha", "gnucash_guid": "shared_guid"},
+            "b": {"display_name": "Beta",  "gnucash_guid": "shared_guid"},
+            "c": {"display_name": "Gamma", "gnucash_guid": "shared_guid"},
+        }
+        result = sync_util.validate_and_cleanup_duplicates()
+        assert result["duplicates_found"] == 2
+        assert result["duplicates_removed"] == 2
+        assert "a" in sync_util.vendors_data
+        assert "b" not in sync_util.vendors_data
+        assert "c" not in sync_util.vendors_data
+
+    def test_multiple_duplicate_groups(self, sync_util):
+        sync_util.vendors_data = {
+            "a": {"display_name": "Alpha", "gnucash_guid": "guid_1"},
+            "b": {"display_name": "Beta",  "gnucash_guid": "guid_1"},
+            "c": {"display_name": "Gamma", "gnucash_guid": "guid_2"},
+            "d": {"display_name": "Delta", "gnucash_guid": "guid_2"},
+        }
+        result = sync_util.validate_and_cleanup_duplicates()
+        assert result["duplicates_removed"] == 2
+        assert len(sync_util.vendors_data) == 2
+
+    def test_auto_fix_false_reports_only(self, sync_util):
+        sync_util.vendors_data = {
+            "a": {"display_name": "Alpha", "gnucash_guid": "shared_guid"},
+            "b": {"display_name": "Beta",  "gnucash_guid": "shared_guid"},
+        }
+        result = sync_util.validate_and_cleanup_duplicates(auto_fix=False)
+        assert result["duplicates_found"] == 1
+        assert result["duplicates_removed"] == 0
+        assert "a" in sync_util.vendors_data
+        assert "b" in sync_util.vendors_data
+
+    def test_vendor_without_guid_skipped(self, sync_util):
+        sync_util.vendors_data = {
+            "a": {"display_name": "Alpha"},  # no gnucash_guid key
+            "b": {"display_name": "Beta"},   # no gnucash_guid key
+        }
+        result = sync_util.validate_and_cleanup_duplicates()
+        assert result["duplicates_found"] == 0
+        assert len(sync_util.vendors_data) == 2
+
+
+class TestResetVendorToUnsynced:
+
+    def test_removes_sync_fields(self, sync_util):
+        sync_util.vendors_data = {
+            "v1": {
+                "display_name": "Vendor 1",
+                "gnucash_guid": "abc",
+                "gnucash_id": "000001",
+                "expense_account_guid": "xyz",
+            }
+        }
+        result = sync_util.reset_vendor_to_unsynced("v1")
+        assert result is True
+        assert "gnucash_guid" not in sync_util.vendors_data["v1"]
+        assert "gnucash_id" not in sync_util.vendors_data["v1"]
+        assert "expense_account_guid" not in sync_util.vendors_data["v1"]
+
+    def test_preserves_other_fields(self, sync_util):
+        sync_util.vendors_data = {
+            "v1": {
+                "display_name": "Vendor 1",
+                "addr_line1": "123 Main St",
+                "gnucash_guid": "abc",
+            }
+        }
+        sync_util.reset_vendor_to_unsynced("v1")
+        assert sync_util.vendors_data["v1"]["display_name"] == "Vendor 1"
+        assert sync_util.vendors_data["v1"]["addr_line1"] == "123 Main St"
+
+    def test_unknown_key_returns_false(self, sync_util):
+        sync_util.vendors_data = {}
+        assert sync_util.reset_vendor_to_unsynced("nonexistent") is False
+
+    def test_fields_already_absent_is_ok(self, sync_util):
+        sync_util.vendors_data = {"v1": {"display_name": "Vendor 1"}}
+        assert sync_util.reset_vendor_to_unsynced("v1") is True
+
+
+class TestUpdateVendorIds:
+
+    def test_updates_guid_and_id(self, sync_util):
+        sync_util.vendors_data = {"v1": {"display_name": "Vendor 1"}}
+        result = sync_util.update_vendor_ids("v1", {"guid": "new_guid", "id": "000007"})
+        assert result is True
+        assert sync_util.vendors_data["v1"]["gnucash_guid"] == "new_guid"
+        assert sync_util.vendors_data["v1"]["gnucash_id"] == "000007"
+
+    def test_increments_stats(self, sync_util):
+        sync_util.vendors_data = {"v1": {"display_name": "Vendor 1"}}
+        sync_util.update_vendor_ids("v1", {"guid": "g", "id": "1"})
+        assert sync_util.stats["updated"] == 1
+
+    def test_missing_key_returns_false(self, sync_util):
+        sync_util.vendors_data = {}
+        assert sync_util.update_vendor_ids("nonexistent", {"guid": "g", "id": "1"}) is False
