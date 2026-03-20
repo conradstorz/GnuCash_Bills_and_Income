@@ -424,3 +424,63 @@ class TestValidateVendorReferences:
         assert "unsynced" not in result["valid"]
         assert "unsynced" not in result["invalid"]
         assert "unsynced" not in result["fixed"]
+
+# ---------------------------------------------------------------------------
+# Layer 4 — Full stack with SchemaDiscovery (sync_util_with_schema fixture)
+# ---------------------------------------------------------------------------
+
+class TestBuildVendorInsert:
+
+    def test_returns_valid_sql_and_columns(self, sync_util_with_schema):
+        sql, columns = sync_util_with_schema.build_vendor_insert()
+        assert isinstance(sql, str)
+        assert sql.strip().upper().startswith("INSERT INTO VENDORS")
+        assert isinstance(columns, list)
+        assert len(columns) > 0
+        for required_col in ("guid", "name", "id"):
+            assert required_col in columns
+
+
+class TestCreateVendorInGnucash:
+
+    def test_vendor_row_inserted(self, sync_util_with_schema, db_connection):
+        vendor_data = {"display_name": "CreateTestVendor2026"}
+        sync_util_with_schema.create_vendor_in_gnucash("create_test", vendor_data)
+        guid = vendor_data.get("gnucash_guid")
+        assert guid, "gnucash_guid was not set on vendor_data"
+        conn = sqlite3.connect(str(db_connection))
+        row = conn.execute("SELECT guid FROM vendors WHERE guid = ?", (guid,)).fetchone()
+        conn.close()
+        assert row is not None
+
+    def test_address_fields_saved(self, sync_util_with_schema, db_connection):
+        vendor_data = {
+            "display_name": "AddrSaveVendor2026",
+            "addr_name": "AddrSaveVendor2026",
+            "addr_line1": "456 Oak Ave",
+            "phone": "555-9876",
+        }
+        sync_util_with_schema.create_vendor_in_gnucash("addr_save_test", vendor_data)
+        guid = vendor_data.get("gnucash_guid")
+        conn = sqlite3.connect(str(db_connection))
+        row = conn.execute(
+            "SELECT addr_name, addr_addr1, addr_phone FROM vendors WHERE guid = ?",
+            (guid,)
+        ).fetchone()
+        conn.close()
+        assert row is not None
+        assert row[0] == "AddrSaveVendor2026"
+        assert row[1] == "456 Oak Ave"
+        assert row[2] == "555-9876"
+
+    def test_vendor_data_updated_with_guid(self, sync_util_with_schema):
+        vendor_data = {"display_name": "GuidUpdateVendor2026"}
+        result = sync_util_with_schema.create_vendor_in_gnucash("guid_update_test", vendor_data)
+        assert result is True
+        assert vendor_data.get("gnucash_guid")
+        assert vendor_data.get("gnucash_id")
+
+    def test_stats_created_incremented(self, sync_util_with_schema):
+        vendor_data = {"display_name": "StatsVendor2026"}
+        sync_util_with_schema.create_vendor_in_gnucash("stats_test", vendor_data)
+        assert sync_util_with_schema.stats["created"] == 1
