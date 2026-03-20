@@ -90,11 +90,11 @@ def test_new_vendor_form_renders(client):
 
 
 def test_address_lookup_returns_form(client):
-    # With no API keys, should still return a form (possibly with error message)
+    # With no API keys / no OSM results, route returns a "no results" error partial — not a 500.
     response = client.post("/vendors/lookup-address", data={"vendor_name": "Acme Electric"})
     assert response.status_code == 200
-    # Should return HTML with a form, not a 500
-    assert b"<form" in response.content or b"form" in response.content.lower()
+    # Either a results form (when lookup succeeds) or a "No results found" error message
+    assert b"<form" in response.content or b"No results found" in response.content
 
 
 def test_create_vendor_empty_name_rejected(client):
