@@ -59,3 +59,38 @@ class TestGetLockInfo:
         _insert_lock(lock_db, "GnuCash@HOST", 5678)
         info = get_lock_info()
         assert info == {"hostname": "GnuCash@HOST", "pid": 5678}
+
+
+class TestIsLockedByOthers:
+    def test_not_locked(self, lock_db):
+        assert is_locked_by_others() == (False, None, None)
+
+    def test_locked_by_own_process(self, lock_db):
+        my_hostname = _get_lock_hostname()
+        my_pid = os.getpid()
+        _insert_lock(lock_db, my_hostname, my_pid)
+        assert is_locked_by_others() == (False, None, None)
+
+    def test_locked_by_different_pid(self, lock_db):
+        my_hostname = _get_lock_hostname()
+        foreign_pid = os.getpid() + 9999
+        _insert_lock(lock_db, my_hostname, foreign_pid)
+        locked, hostname, pid = is_locked_by_others()
+        assert locked is True
+        assert hostname == my_hostname
+        assert pid == foreign_pid
+
+    def test_locked_by_different_hostname(self, lock_db):
+        _insert_lock(lock_db, "GnuCash@OTHER", 1234)
+        locked, hostname, pid = is_locked_by_others()
+        assert locked is True
+        assert hostname == "GnuCash@OTHER"
+        assert pid == 1234
+
+
+class TestGetLockHostname:
+    def test_format_starts_with_prefix(self):
+        assert _get_lock_hostname().startswith("BillProcessor@")
+
+    def test_contains_machine_name(self):
+        assert socket.gethostname() in _get_lock_hostname()
