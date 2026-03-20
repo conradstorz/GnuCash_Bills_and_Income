@@ -170,3 +170,76 @@ class TestUpdateVendorIds:
     def test_missing_key_returns_false(self, sync_util):
         sync_util.vendors_data = {}
         assert sync_util.update_vendor_ids("nonexistent", {"guid": "g", "id": "1"}) is False
+
+# ---------------------------------------------------------------------------
+# Layer 2 — File I/O (no DB)
+# ---------------------------------------------------------------------------
+
+class TestLoadVendorDatabase:
+
+    def test_file_missing_returns_false(self, sync_util):
+        # vendor_db_path was not written — file does not exist
+        assert sync_util.load_vendor_database() is False
+
+    def test_empty_vendors_returns_false(self, sync_util):
+        sync_util.vendor_db_path.write_text(json.dumps({"vendors": {}, "aliases": {}}))
+        assert sync_util.load_vendor_database() is False
+
+    def test_loads_vendors_correctly(self, sync_util):
+        data = {
+            "vendors": {
+                "acme": {"display_name": "Acme Corp", "gnucash_guid": "guid_a"},
+                "beta": {"display_name": "Beta Co",  "gnucash_guid": "guid_b"},
+            },
+            "aliases": {}
+        }
+        sync_util.vendor_db_path.write_text(json.dumps(data))
+        assert sync_util.load_vendor_database() is True
+        assert len(sync_util.vendors_data) == 2
+        assert sync_util.stats["total"] == 2
+
+    def test_auto_cleans_duplicates_on_load(self, sync_util):
+        data = {
+            "vendors": {
+                "a": {"display_name": "Alpha", "gnucash_guid": "unique_guid"},
+                "b": {"display_name": "Beta",  "gnucash_guid": "dup_guid"},
+                "c": {"display_name": "Gamma", "gnucash_guid": "dup_guid"},
+            },
+            "aliases": {}
+        }
+        sync_util.vendor_db_path.write_text(json.dumps(data))
+        assert sync_util.load_vendor_database() is True
+        # In-memory: only 2 unique entries remain
+        assert len(sync_util.vendors_data) == 2
+        # File on disk was rewritten with the cleaned data
+        saved = json.loads(sync_util.vendor_db_path.read_text())
+        assert len(saved["vendors"]) == 2
+
+    def test_malformed_json_returns_false(self, sync_util):
+        sync_util.vendor_db_path.write_text("{not valid json")
+        assert sync_util.load_vendor_database() is False
+
+
+class TestSaveVendorDatabase:
+
+    def test_saves_vendors_and_preserves_aliases(self, sync_util):
+        existing = {"vendors": {}, "aliases": {"foo": "bar"}}
+        sync_util.vendor_db_path.write_text(json.dumps(existing))
+        sync_util.vendors_data = {"v1": {"display_name": "V1"}}
+        sync_util.save_vendor_database()
+        saved = json.loads(sync_util.vendor_db_path.read_text())
+        assert "v1" in saved["vendors"]
+        assert saved["aliases"]["foo"] == "bar"
+
+    def test_creates_aliases_key_if_file_new(self, sync_util):
+        # vendor_db_path does not exist yet
+        sync_util.vendors_data = {"v1": {"display_name": "V1"}}
+        sync_util.save_vendor_database()
+        saved = json.loads(sync_util.vendor_db_path.read_text())
+        assert saved["aliases"] == {}
+
+    def test_write_error_returns_false(self, sync_util, tmp_path):
+        # Point vendor_db_path inside a nonexistent subdirectory
+        sync_util.vendor_db_path = tmp_path / "nonexistent_dir" / "vendor_database.json"
+        sync_util.vendors_data = {"v1": {"display_name": "V1"}}
+        assert sync_util.save_vendor_database() is False
