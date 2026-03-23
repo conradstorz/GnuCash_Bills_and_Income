@@ -131,6 +131,7 @@ def add_to_queue(
     amount: float = Form(...),
     memo: str = Form(""),
     bill_date: str = Form(""),
+    check_number: str = Form(""),
 ):
     """Add a bill to the queue and return refreshed bill entry form."""
     if not vendor_name.strip():
@@ -141,7 +142,7 @@ def add_to_queue(
         parsed_date = date.fromisoformat(bill_date) if bill_date else date.today()
     except ValueError:
         parsed_date = date.today()
-    queue_io.add_bill(vendor_name, amount, memo, parsed_date)
+    queue_io.add_bill(vendor_name, amount, memo, parsed_date, check_number)
     return templates.TemplateResponse(request, "bill_entry.html", {
         "today": date.today().isoformat(),
         "success": f"Added {vendor_name} ${amount:.2f} to queue",
@@ -208,6 +209,7 @@ def _process_one_bill(bill: dict) -> dict:
             checking_account_guid=checking_guid,
             payment_date=bill_date,
             memo=bill.get("memo", ""),
+            check_number=bill.get("check_number", ""),
         )
         logger.info(f"Processed bill: {bill['vendor_name']} ${bill['amount']:.2f}")
         return {"ok": True}
@@ -267,6 +269,7 @@ def edit_queue_item(
     amount: float = Form(...),
     memo: str = Form(""),
     bill_date: str = Form(""),
+    check_number: str = Form(""),
 ):
     """Update a queued bill and return refreshed queue card."""
     if not vendor_name.strip():
@@ -277,7 +280,7 @@ def edit_queue_item(
         parsed_date = date.fromisoformat(bill_date) if bill_date else date.today()
     except ValueError:
         parsed_date = date.today()
-    ok = queue_io.update_bill(index, vendor_name, amount, memo, parsed_date)
+    ok = queue_io.update_bill(index, vendor_name, amount, memo, parsed_date, check_number)
     queue = queue_io.read_queue()
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": queue,

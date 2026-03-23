@@ -97,6 +97,61 @@ def test_address_lookup_returns_form(client):
     assert b"<form" in response.content or b"No results found" in response.content
 
 
+def test_add_bill_with_check_number(client, tmp_queue):
+    response = client.post("/bills/queue", data={
+        "vendor_name": "Acme Electric",
+        "amount": "123.45",
+        "memo": "Test bill",
+        "bill_date": "2026-03-01",
+        "check_number": "1042",
+    })
+    assert response.status_code == 200
+    content = tmp_queue.read_text()
+    assert "1042" in content
+
+
+def test_add_bill_without_check_number_omits_fifth_field(client, tmp_queue):
+    response = client.post("/bills/queue", data={
+        "vendor_name": "Acme Electric",
+        "amount": "123.45",
+        "memo": "Test bill",
+        "bill_date": "2026-03-01",
+    })
+    assert response.status_code == 200
+    content = tmp_queue.read_text().strip()
+    # Should end with the date, no trailing comma
+    assert content.endswith("2026-03-01")
+
+
+def test_edit_bill_adds_check_number(client, tmp_queue):
+    tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
+    response = client.patch("/bills/queue/0", data={
+        "vendor_name": "Acme Electric",
+        "amount": "123.45",
+        "memo": "test",
+        "bill_date": "2026-03-01",
+        "check_number": "2001",
+    })
+    assert response.status_code == 200
+    content = tmp_queue.read_text()
+    assert "2001" in content
+
+
+def test_edit_bill_clears_check_number(client, tmp_queue):
+    tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01, 1042\n")
+    response = client.patch("/bills/queue/0", data={
+        "vendor_name": "Acme Electric",
+        "amount": "123.45",
+        "memo": "test",
+        "bill_date": "2026-03-01",
+        "check_number": "",
+    })
+    assert response.status_code == 200
+    content = tmp_queue.read_text().strip()
+    assert "1042" not in content
+    assert content.endswith("2026-03-01")
+
+
 def test_create_vendor_empty_name_rejected(client):
     response = client.post("/vendors/create", data={
         "vendor_name": "",
