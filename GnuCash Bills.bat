@@ -19,9 +19,9 @@ timeout /t 1 /nobreak >nul
 set /a attempts+=1
 netstat -ano | findstr :7432 | findstr LISTENING >nul 2>&1
 if %errorlevel% equ 0 goto server_ready
-if %attempts% lss 15 goto wait_loop
+if %attempts% lss 30 goto wait_loop
 
-echo ERROR: Server failed to start on port 7432 after 15 seconds.
+echo ERROR: Server failed to start on port 7432 after 30 seconds.
 echo Check the server console window for errors.
 pause
 exit /b 1
