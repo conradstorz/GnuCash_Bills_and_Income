@@ -2149,6 +2149,7 @@ def pay_bill(
         checking_account_guid: GUID of checking/bank account to pay from
         payment_date: Payment date (defaults to today)
         memo: Payment memo (defaults to bill's notes)
+        check_number: Check number written to transactions.num (default "")
         verify: If True, verify payment (default True)
     
     Returns:
