@@ -428,6 +428,36 @@ class TestBillWorkflow:
         assert True
 
 
+    def test_pay_bill_stores_check_number(self, db_connection, test_vendor_guid, test_accounts, bill_data):
+        """check_number is written to transactions.num on the payment transaction."""
+        import sqlite3
+        bill_guid = gnucash_db.create_bill(
+            vendor_guid=test_vendor_guid,
+            expense_account_guid=test_accounts['expense_account'],
+            amount=bill_data['amount'],
+            memo=bill_data['memo'],
+            bill_date=bill_data['date'],
+        )
+        gnucash_db.post_bill(
+            bill_guid=bill_guid,
+            post_date=bill_data['date'],
+            ap_account_guid=test_accounts['ap_account'],
+        )
+        payment_txn_guid = gnucash_db.pay_bill(
+            bill_guid=bill_guid,
+            checking_account_guid=test_accounts['checking_account'],
+            payment_date=bill_data['date'],
+            check_number="1042",
+        )
+        conn = sqlite3.connect(str(db_connection))
+        row = conn.execute(
+            "SELECT num FROM transactions WHERE guid = ?", (payment_txn_guid,)
+        ).fetchone()
+        conn.close()
+        assert row is not None
+        assert row[0] == "1042"
+
+
 if __name__ == "__main__":
     # Run with: python -m pytest tests/test_bill_workflow.py -v
     # Run manual tests: python -m pytest tests/test_bill_workflow.py -v -m manual

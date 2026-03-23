@@ -2132,7 +2132,8 @@ def pay_bill(
     checking_account_guid: str,
     payment_date: date = None,
     memo: str = None,
-    verify: bool = True
+    check_number: str = "",
+    verify: bool = True,
 ) -> str:
     """
     Step 3: Pay a posted bill.
@@ -2249,8 +2250,8 @@ def pay_bill(
             conn.execute("""
                 INSERT INTO transactions (
                     guid, currency_guid, num, post_date, enter_date, description
-                ) VALUES (?, ?, '', ?, ?, ?)
-            """, (payment_txn_guid, usd_guid, date_posted, date_entered, bill['vendor_name']))
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            """, (payment_txn_guid, usd_guid, check_number, date_posted, date_entered, bill['vendor_name']))
             
             # 4. Create transaction slots
             # trans-txn-type = "P" for Payment (CRITICAL!)
