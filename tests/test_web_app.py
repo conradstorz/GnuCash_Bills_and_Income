@@ -142,3 +142,23 @@ def test_queued_bills_partial_route(client, tmp_queue):
     response = client.get("/partials/queued-bills")
     assert response.status_code == 200
     assert b"queued-bills" in response.content
+
+
+class TestFormatBillLine:
+    def test_with_check_number_appends_fifth_field(self):
+        from bill_processor.web.queue_io import _format_bill_line
+        from datetime import date
+        result = _format_bill_line("Acme Electric", 150.50, "memo", date(2026, 3, 15), "1042")
+        assert result == "Acme Electric, 150.50, memo, 2026-03-15, 1042\n"
+
+    def test_without_check_number_omits_fifth_field(self):
+        from bill_processor.web.queue_io import _format_bill_line
+        from datetime import date
+        result = _format_bill_line("Acme Electric", 150.50, "memo", date(2026, 3, 15))
+        assert result == "Acme Electric, 150.50, memo, 2026-03-15\n"
+
+    def test_empty_check_number_omits_fifth_field(self):
+        from bill_processor.web.queue_io import _format_bill_line
+        from datetime import date
+        result = _format_bill_line("Acme Electric", 150.50, "memo", date(2026, 3, 15), "")
+        assert result == "Acme Electric, 150.50, memo, 2026-03-15\n"
