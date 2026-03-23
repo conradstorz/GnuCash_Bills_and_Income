@@ -9,7 +9,7 @@
   {% if queue %}
     <p class="status-warn">&#9888; {{ queue|length }} bill(s) waiting to be processed</p>
     <table>
-      <thead><tr><th>Vendor</th><th>Amount</th><th>Memo</th><th>Date</th><th></th></tr></thead>
+      <thead><tr><th>Vendor</th><th>Amount</th><th>Memo</th><th>Date</th><th>Check #</th><th></th></tr></thead>
       <tbody>
         {% for bill in queue %}
         <tr>
@@ -17,6 +17,7 @@
           <td>${{ "%.2f"|format(bill.amount) }}</td>
           <td>{{ bill.memo }}</td>
           <td>{{ bill.date }}</td>
+          <td>{{ bill.check_number }}</td>
           <td>
             <button hx-post="/bills/queue/{{ bill._index }}/process"
                     hx-target="#queued-bills"
@@ -25,6 +26,18 @@
                     hx-target="#queued-bills"
                     hx-swap="outerHTML"
                     hx-confirm="Remove this bill from the queue?">Remove</button>
+            <form style="display:inline"
+                  hx-patch="/bills/queue/{{ bill._index }}"
+                  hx-target="#queued-bills"
+                  hx-swap="outerHTML">
+              <input type="hidden" name="vendor_name" value="{{ bill.vendor_name }}">
+              <input type="hidden" name="amount" value="{{ bill.amount }}">
+              <input type="hidden" name="memo" value="{{ bill.memo }}">
+              <input type="hidden" name="bill_date" value="{{ bill.date }}">
+              <input type="text" name="check_number" value="{{ bill.check_number }}"
+                     placeholder="Check #" style="width:5rem">
+              <button type="submit">Save</button>
+            </form>
           </td>
         </tr>
         {% endfor %}
