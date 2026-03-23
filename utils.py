@@ -48,12 +48,12 @@ def strip_vendor_name(name: str) -> str:
 def parse_input_line(line: str) -> Optional[dict]:
     """
     Parse a bill input line.
-    
-    Format: vendor_name, amount, memo, date
-    - memo and date are optional
+
+    Format: vendor_name, amount, memo, date, check_number
+    - memo, date, and check_number are optional
     - Returns None if line is empty or invalid
-    
-    Returns dict with keys: vendor_name, amount, memo, date
+
+    Returns dict with keys: vendor_name, amount, memo, date, check_number
     """
     line = line.strip()
     
@@ -100,12 +100,16 @@ def parse_input_line(line: str) -> Optional[dict]:
                     continue
             else:
                 logger.warning(f"Invalid date '{parts[3]}', using today")
-    
+
+    # Parse check number (optional 5th field)
+    check_number = parts[4].strip() if len(parts) > 4 else ""
+
     return {
         'vendor_name': vendor_name,
         'amount': amount,
         'memo': memo,
-        'date': bill_date
+        'date': bill_date,
+        'check_number': check_number,
     }
 
 

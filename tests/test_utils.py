@@ -143,9 +143,41 @@ class TestParseInputLine:
         assert result['date'] == date.today()
 
 
+class TestParseInputLineCheckNumber:
+    """Test parse_input_line() check_number field"""
+
+    def test_five_field_line_parses_check_number(self):
+        result = parse_input_line("Acme Electric, 150.50, January bill, 2026-03-15, 1042")
+        assert result is not None
+        assert result["check_number"] == "1042"
+
+    def test_four_field_line_defaults_check_number_to_empty(self):
+        result = parse_input_line("Acme Electric, 150.50, January bill, 2026-03-15")
+        assert result is not None
+        assert result["check_number"] == ""
+
+    def test_five_field_line_blank_check_number_defaults_to_empty(self):
+        result = parse_input_line("Acme Electric, 150.50, January bill, 2026-03-15, ")
+        assert result is not None
+        assert result["check_number"] == ""
+
+    def test_check_number_can_be_non_numeric(self):
+        result = parse_input_line("Acme Electric, 150.50, memo, 2026-03-15, EFT-99")
+        assert result is not None
+        assert result["check_number"] == "EFT-99"
+
+    def test_existing_four_field_dict_keys_unchanged(self):
+        result = parse_input_line("Acme Electric, 150.50, memo, 2026-03-15, 1042")
+        assert result is not None
+        assert "vendor_name" in result
+        assert "amount" in result
+        assert "memo" in result
+        assert "date" in result
+
+
 class TestFuzzyMatchVendor:
     """Test fuzzy_match_vendor() function"""
-    
+
     def test_exact_match(self):
         """Test exact match gets high score"""
         known_vendors = {
