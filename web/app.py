@@ -175,6 +175,11 @@ def _process_one_bill(bill: dict) -> dict:
 
     ap_account = gnucash_db.get_account_by_guid(ap_guid)
     checking_account = gnucash_db.get_account_by_guid(checking_guid)
+    if not ap_account or not checking_account:
+        return {
+            "ok": False,
+            "error": "Configured account not found in GnuCash — update Settings > Processing Accounts",
+        }
     logger.info(
         "Using A/P account: {} ({})", ap_account["name"], ap_guid[:8]
     )
@@ -200,16 +205,16 @@ def _process_one_bill(bill: dict) -> dict:
             expense_account_guid=expense_account_guid,
             amount=bill["amount"],
             memo=bill.get("memo", ""),
-            date=bill["date"],
+            bill_date=bill["date"],
         )
         gnucash_db.post_bill(
             bill_guid=bill_guid,
-            date=bill["date"],
+            post_date=bill["date"],
             ap_account_guid=ap_guid,
         )
         gnucash_db.pay_bill(
             bill_guid=bill_guid,
-            date=bill["date"],
+            payment_date=bill["date"],
             checking_account_guid=checking_guid,
             check_number=bill.get("check_number", ""),
         )
