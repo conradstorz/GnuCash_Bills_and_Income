@@ -105,8 +105,7 @@ def test_new_vendor_form_hx_vals_contains_display_name(client):
     response = client.get("/vendors/new-form", params={"name": "Kroger"})
     assert response.status_code == 200
     # The hx-vals attribute must contain the JSON key "display_name" (with quotes)
-    # and the rendered vendor name. Neither of these patterns exist in the current
-    # template, so this assertion will correctly FAIL before the implementation.
+    # and the rendered vendor name.
     assert '"display_name": "Kroger"' in response.text
 
 
@@ -131,8 +130,12 @@ def test_new_vendor_form_cancel_clears_vendor_input(client):
     response = client.get("/vendors/new-form", params={"name": "Kroger"})
     assert response.status_code == 200
     html = response.text
+    # All three clearing operations must be in the cancel onclick
+    assert "new-vendor-section" in html
     assert "vendor-dropdown" in html
     assert "vendor-input" in html
+    assert "innerHTML=''" in html  # section and dropdown are cleared this way
+    assert ".value=''" in html  # vendor-input is blanked this way
 
 
 def test_address_lookup_returns_form(client):

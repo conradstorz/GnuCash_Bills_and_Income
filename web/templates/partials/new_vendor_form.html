@@ -13,7 +13,7 @@
          hx-post="/vendors/lookup-address"
          hx-trigger="load"
          hx-swap="innerHTML"
-         hx-vals='{"display_name": "{{ display_name | e }}"}'>
+         hx-vals='{"display_name": {{ display_name | tojson }}}'>
     </div>
 
     <label for="new-vendor-addr1">Address Line 1</label>
