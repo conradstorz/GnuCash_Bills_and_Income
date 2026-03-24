@@ -121,6 +121,7 @@ def dashboard(request: Request):
         "error": None,
         "cash_accounts": _get_enabled_cash_accounts(),
         "bank_accounts": gnucash_db.get_checking_accounts(),
+        "processing_accounts_configured": settings.processing_accounts_configured,
     })
 
 
@@ -157,6 +158,7 @@ def remove_from_queue(request: Request, index: int):
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": queue,
         "last_error": None if ok else f"Could not remove bill at index {index}",
+        "processing_accounts_configured": settings.processing_accounts_configured,
     })
 
 
@@ -239,6 +241,7 @@ def process_all(request: Request):
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": remaining,
         "last_error": "; ".join(errors) if errors else None,
+        "processing_accounts_configured": settings.processing_accounts_configured,
     })
 
 
@@ -252,6 +255,7 @@ def process_one(request: Request, index: int):
         return templates.TemplateResponse(request, "partials/queued_bills.html", {
             "queue": queue,
             "last_error": f"Bill at index {index} not found in queue",
+            "processing_accounts_configured": settings.processing_accounts_configured,
         })
     result = _process_one_bill(bill)
     if result["ok"]:
@@ -260,6 +264,7 @@ def process_one(request: Request, index: int):
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": remaining,
         "last_error": None if result["ok"] else result["error"],
+        "processing_accounts_configured": settings.processing_accounts_configured,
     })
 
 
@@ -287,6 +292,7 @@ def edit_queue_item(
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": queue,
         "last_error": None if ok else f"Could not update bill at index {index}",
+        "processing_accounts_configured": settings.processing_accounts_configured,
     })
 
 
@@ -448,6 +454,7 @@ def get_queued_bills_partial(request: Request):
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": queue,
         "last_error": None,  # Polling auto-clears stale action errors — intentional
+        "processing_accounts_configured": settings.processing_accounts_configured,
     })
 
 

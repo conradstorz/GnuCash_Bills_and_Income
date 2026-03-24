@@ -525,3 +525,31 @@ class TestProcessingAccountsSettings:
         assert response.status_code == 200
         assert b"error" in response.content.lower() or b"invalid" in response.content.lower()
         assert isolated_settings.checking_account_guid is None  # unchanged
+
+
+class TestDashboardButtonGating:
+    """Process buttons are disabled when processing accounts are not configured."""
+
+    def test_process_buttons_disabled_when_accounts_not_configured(
+        self, client, tmp_queue, monkeypatch
+    ):
+        from bill_processor.web import app as web_app
+        monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", None)
+        monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", None)
+        tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
+
+        response = client.get("/partials/queued-bills")
+        assert response.status_code == 200
+        assert b"disabled" in response.content
+
+    def test_process_buttons_enabled_when_accounts_configured(
+        self, client, tmp_queue, monkeypatch
+    ):
+        from bill_processor.web import app as web_app
+        monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
+        monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", "c" * 32)
+        tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
+
+        response = client.get("/partials/queued-bills")
+        assert response.status_code == 200
+        assert b"disabled" not in response.content

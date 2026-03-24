@@ -21,7 +21,8 @@
           <td>
             <button hx-post="/bills/queue/{{ bill._index }}/process"
                     hx-target="#queued-bills"
-                    hx-swap="outerHTML">Process</button>
+                    hx-swap="outerHTML"
+                    {% if not processing_accounts_configured %}disabled{% endif %}>Process</button>
             <button hx-delete="/bills/queue/{{ bill._index }}"
                     hx-target="#queued-bills"
                     hx-swap="outerHTML"
@@ -47,7 +48,11 @@
       <button class="btn-primary"
         hx-post="/bills/queue/process"
         hx-target="#queued-bills"
-        hx-swap="outerHTML">Process All</button>
+        hx-swap="outerHTML"
+        {% if not processing_accounts_configured %}disabled{% endif %}>Process All</button>
+      <a href="/settings/processing-accounts" style="margin-left:0.75rem; font-size:0.9em;">
+        {% if not processing_accounts_configured %}&#9888; {% endif %}Configure processing accounts
+      </a>
     </div>
   {% else %}
     <p class="status-ok">&#10003; No bills queued</p>
