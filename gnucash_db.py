@@ -1655,7 +1655,11 @@ def get_checking_accounts() -> List[Dict]:
 
 
 def get_payable_accounts() -> List[Dict]:
-    """Get all non-placeholder Accounts Payable (PAYABLE-type) accounts."""
+    """
+    Get all non-placeholder Accounts Payable (PAYABLE-type) accounts.
+
+    Returns list of dicts with: guid, name, description
+    """
     with get_connection() as conn:
         cursor = conn.execute("""
             SELECT guid, name, description FROM accounts

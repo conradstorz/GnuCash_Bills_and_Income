@@ -64,6 +64,8 @@ class SettingsManager:
             "accounts_payable_path": config.ACCOUNTS_PAYABLE_PATH,
             "default_expense_parent": config.DEFAULT_EXPENSE_PARENT,
             "cash_on_hand_account_name": config.CASH_ON_HAND_ACCOUNT_NAME,
+            "ap_account_guid": None,
+            "checking_account_guid": None,
             
             # Default Values
             "default_memo": config.DEFAULT_MEMO,
@@ -119,8 +121,6 @@ class SettingsManager:
             "terminal_width": config.TERMINAL_WIDTH,
             "log_level": config.LOG_LEVEL,
         }
-        self._settings.setdefault("ap_account_guid", None)
-        self._settings.setdefault("checking_account_guid", None)
     
     def save(self):
         """Persist current settings to JSON file."""

@@ -239,13 +239,13 @@ class TestSettingsManagerErrorHandling:
 
 
 class TestProcessingAccountSettings:
-    def test_ap_account_guid_defaults_to_none(self, tmp_path, monkeypatch):
+    def test_ap_account_guid_defaults_to_none(self, tmp_path):
         from bill_processor import settings_manager
         tmp_settings = tmp_path / "user_settings.json"
         sm = settings_manager.SettingsManager(settings_file=tmp_settings)
         assert sm.ap_account_guid is None
 
-    def test_checking_account_guid_defaults_to_none(self, tmp_path, monkeypatch):
+    def test_checking_account_guid_defaults_to_none(self, tmp_path):
         from bill_processor import settings_manager
         tmp_settings = tmp_path / "user_settings.json"
         sm = settings_manager.SettingsManager(settings_file=tmp_settings)
