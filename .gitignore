@@ -39,6 +39,7 @@ columbo_report.txt
 
 # Tool-specific
 .claude/
+.superpowers/
 .hypothesis/
 
 # Editor / OS
