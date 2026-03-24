@@ -100,7 +100,7 @@ document.getElementById('vendor-input').value='';
 
 ## What Is Not Changing
 
-- `/vendors/lookup-address` route signature — only the query assembly logic changes internally
+- `/vendors/lookup-address` route signature — gains `addr_city` and `addr_zip` Form parameters; query assembly logic updated; response format unchanged
 - `/vendors/create` route — unchanged
 - `address_candidates.html` candidate selection `onclick` — unchanged (fills fields, clears candidate list)
 - Existing vendor selection in `vendor_dropdown.html` — unchanged
