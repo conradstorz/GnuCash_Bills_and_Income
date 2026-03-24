@@ -930,7 +930,7 @@ async def reset_settings(request: Request):
 
 
 @app.get("/settings/processing-accounts", response_class=HTMLResponse)
-def get_processing_accounts_settings(request: Request):
+async def get_processing_accounts_settings(request: Request):
     """Render the processing accounts selection page."""
     return templates.TemplateResponse(request, "settings_processing_accounts.html", {
         "payable_accounts": gnucash_db.get_payable_accounts(),
@@ -941,7 +941,7 @@ def get_processing_accounts_settings(request: Request):
 
 
 @app.post("/settings/processing-accounts/ap-account", response_class=HTMLResponse)
-def save_ap_account(request: Request, ap_account_guid: str = Form(...)):
+async def save_ap_account(request: Request, ap_account_guid: str = Form(...)):
     """HTMX — save selected A/P account GUID and return updated section."""
     payable_accounts = gnucash_db.get_payable_accounts()
     valid_guids = {a["guid"] for a in payable_accounts}
@@ -962,7 +962,7 @@ def save_ap_account(request: Request, ap_account_guid: str = Form(...)):
 
 
 @app.post("/settings/processing-accounts/checking-account", response_class=HTMLResponse)
-def save_checking_account(request: Request, checking_account_guid: str = Form(...)):
+async def save_checking_account(request: Request, checking_account_guid: str = Form(...)):
     """HTMX — save selected checking account GUID and return updated section."""
     checking_accounts = gnucash_db.get_checking_accounts()
     valid_guids = {a["guid"] for a in checking_accounts}
