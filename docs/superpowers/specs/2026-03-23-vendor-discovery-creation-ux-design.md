@@ -14,7 +14,13 @@
 
 **Root cause:** The `onclick` on the "+ Add as new vendor…" item in `vendor_dropdown.html` empties `#vendor-dropdown`, removing the element that carries `hx-get` from the DOM before HTMX can fire the request.
 
-**Fix:** Remove the `onclick` attribute from that item. Replace it with `hx-on::after-request="document.getElementById('vendor-dropdown').innerHTML=''"`. HTMX fires the request first; the dropdown is cleared after the response arrives and the new vendor form is already loaded.
+**Fix:** Remove the `onclick` attribute from that item. Replace it with:
+```
+hx-on::after-request="document.getElementById('vendor-dropdown').innerHTML=''"
+```
+HTMX fires the request first; the dropdown is cleared after the response arrives and the new vendor form is already loaded. The existing `hx-get`, `hx-target="#new-vendor-section"`, and `hx-swap="innerHTML"` attributes on that element are preserved unchanged.
+
+**Second-click note:** After `after-request` fires, `#vendor-dropdown` is empty, so the "+ Add…" item no longer exists in the DOM. A second click cannot occur. No additional handling needed.
 
 **Files changed:** `web/templates/partials/vendor_dropdown.html`
 
@@ -28,7 +34,7 @@
 - `hx-post="/vendors/lookup-address"`
 - `hx-trigger="load"`
 - `hx-swap="innerHTML"`
-- `hx-vals` carrying the vendor display name
+- `hx-vals='{"display_name": "{{ display_name | e }}"}'` — Jinja2 renders the vendor name into the JSON string at template render time, so HTMX sends the correct value when it fires on load.
 
 The "Look Up Address" button is removed — it is replaced by the auto-trigger.
 
@@ -38,16 +44,18 @@ The "Look Up Address" button is removed — it is replaced by the auto-trigger.
 
 ## Section 3: Refinement Inputs Trigger Narrowed Search
 
-**Behavior:** As the user types in the city, ZIP, or street fields, the address search re-fires (debounced 500ms) using all currently-filled values combined as the search query. This naturally narrows results via the address lookup service without any server-side state.
+**Behavior:** As the user types in the city or ZIP fields, the address search re-fires (debounced 500ms) using all currently-filled values combined as the search query. This naturally narrows results via the address lookup service without any server-side state.
 
-**Implementation:** The city, ZIP, and street address fields each get:
+**Trigger fields:** `addr_city` and `addr_zip` only. `addr_line1` is intentionally excluded — it is filled by candidate selection, and triggering a search from it would cause an immediate re-search loop after the user picks a candidate.
+
+**Implementation:** The `addr_city` and `addr_zip` inputs each get:
 - `hx-post="/vendors/lookup-address"`
 - `hx-trigger="keyup changed delay:500ms"`
 - `hx-target="#address-candidates"`
 - `hx-swap="innerHTML"`
-- `hx-include` referencing all relevant fields: `display_name`, `addr_line1`, `addr_city`, `addr_zip`
+- `hx-include="closest form"` — sends all form fields; the route reads only `display_name`, `addr_city`, and `addr_zip`
 
-The `/vendors/lookup-address` route is updated to assemble the search query from all provided fields (e.g., `"Kroger Cincinnati 45202"`) instead of only `display_name`.
+**Route update (`/vendors/lookup-address`):** Add `addr_city: str = Form("")` and `addr_zip: str = Form("")` to the route signature alongside the existing `vendor_name` and `display_name` parameters. Build the search string by joining all non-empty values from `display_name`, `addr_city`, and `addr_zip` with a space (e.g., `"Kroger Cincinnati 45202"`). Skip any that are empty or whitespace-only. Pass the combined string to the address lookup service as the search query.
 
 **Files changed:**
 - `web/templates/partials/new_vendor_form.html`
@@ -61,10 +69,10 @@ The `/vendors/lookup-address` route is updated to assemble the search query from
 - All candidates are rendered in a scrollable container sized to show ~3 at a time.
 - No pagination; user scrolls to see more.
 - Even a single candidate requires an explicit click to select — no auto-selection.
-- Selecting a candidate fills the address fields (existing `onclick` behavior preserved) and clears the candidate list.
+- Selecting a candidate fills the address fields (existing `onclick` behavior preserved) and clears the candidate list (`document.getElementById('address-candidates').innerHTML = ''`).
 - The user may then modify any pre-filled field and must click **Create Vendor** to finalize.
 
-**Implementation:** `address_candidates.html` scrollable container height adjusted to `~9rem` (shows ~3 candidates). All other rendering logic unchanged.
+**Implementation:** In `address_candidates.html`, set the scrollable container to `max-height: 9rem; overflow-y: auto`. All other rendering logic unchanged.
 
 **Files changed:** `web/templates/partials/address_candidates.html`
 
@@ -77,7 +85,14 @@ The `/vendors/lookup-address` route is updated to assemble the search query from
 2. Clears `#vendor-dropdown` (removes any stale dropdown)
 3. Sets `#vendor-input` to empty string (blank vendor name field)
 
-**Implementation:** Update the Cancel button's `onclick` to perform all three operations.
+`#vendor-dropdown` and `#vendor-input` are confirmed to exist in the outer page DOM — `#vendor-dropdown` is the container rendered by the bill entry template, and `#vendor-input` is the text input for the vendor name (referenced in `vendor_dropdown.html` line 5).
+
+**Implementation:** Update the Cancel button's `onclick`:
+```javascript
+document.getElementById('new-vendor-section').innerHTML='';
+document.getElementById('vendor-dropdown').innerHTML='';
+document.getElementById('vendor-input').value='';
+```
 
 **Files changed:** `web/templates/partials/new_vendor_form.html`
 
