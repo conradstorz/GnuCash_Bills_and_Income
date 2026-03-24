@@ -85,58 +85,6 @@ def test_vendor_search_empty_query(client):
     assert response.content == b""
 
 
-def test_new_vendor_form_renders(client):
-    response = client.get("/vendors/new-form", params={"name": "TestVendor"})
-    assert response.status_code == 200
-    assert b"TestVendor" in response.content
-
-
-def test_new_vendor_form_auto_fires_address_search_on_load(client):
-    """#address-candidates has hx-trigger=load to auto-fire address search."""
-    response = client.get("/vendors/new-form", params={"name": "Kroger"})
-    assert response.status_code == 200
-    html = response.text
-    assert 'hx-trigger="load"' in html
-    assert 'hx-post="/vendors/lookup-address"' in html
-
-
-def test_new_vendor_form_hx_vals_contains_display_name(client):
-    """hx-vals on #address-candidates includes the rendered vendor display name as JSON."""
-    response = client.get("/vendors/new-form", params={"name": "Kroger"})
-    assert response.status_code == 200
-    # The hx-vals attribute must contain the JSON key "display_name" (with quotes)
-    # and the rendered vendor name.
-    assert '"display_name": "Kroger"' in response.text
-
-
-def test_new_vendor_form_city_zip_have_refinement_triggers(client):
-    """City and ZIP inputs carry HTMX refinement triggers."""
-    response = client.get("/vendors/new-form", params={"name": "Kroger"})
-    assert response.status_code == 200
-    html = response.text
-    assert 'hx-trigger="keyup changed delay:500ms"' in html
-    assert 'hx-include="#new-vendor-form input"' in html
-
-
-def test_new_vendor_form_no_lookup_button(client):
-    """The manual 'Look Up Address' button has been removed."""
-    response = client.get("/vendors/new-form", params={"name": "Kroger"})
-    assert response.status_code == 200
-    assert b"Look Up Address" not in response.content
-
-
-def test_new_vendor_form_cancel_clears_vendor_input(client):
-    """Cancel button onclick clears #new-vendor-section, #vendor-dropdown, and #vendor-input."""
-    response = client.get("/vendors/new-form", params={"name": "Kroger"})
-    assert response.status_code == 200
-    html = response.text
-    # All three clearing operations must be in the cancel onclick
-    assert "new-vendor-section" in html
-    assert "vendor-dropdown" in html
-    assert "vendor-input" in html
-    assert "innerHTML=''" in html  # section and dropdown are cleared this way
-    assert ".value=''" in html  # vendor-input is blanked this way
-
 
 def test_address_lookup_returns_json(client):
     """Address lookup returns JSON with candidates list and message."""

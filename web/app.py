@@ -329,21 +329,6 @@ def vendor_search(request: Request, vendor_name: str = ""):
     })
 
 
-@app.get("/vendors/new-form", response_class=HTMLResponse)
-def new_vendor_form(request: Request, name: str = ""):
-    """Return the new vendor inline creation form."""
-    return templates.TemplateResponse(request, "partials/new_vendor_form.html", {
-        "vendor_name": name,
-        "display_name": name,
-        "addr_line1": "",
-        "addr_line2": "",
-        "addr_city": "",
-        "addr_state": "",
-        "addr_zip": "",
-        "addr_phone": "",
-        "message": "",
-    })
-
 
 @app.post("/vendors/lookup-address")
 def lookup_address(
