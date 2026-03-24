@@ -645,3 +645,19 @@ def test_vendor_dropdown_add_item_uses_after_request_not_onclick(client):
     assert "hx-on::after-request" in html
     # The old synchronous onclick that cleared the dropdown must be gone from the add item.
     assert "onclick=\"document.getElementById('vendor-dropdown').innerHTML=''\"" not in html
+
+
+def test_address_candidates_height_shows_three(client, monkeypatch):
+    """Candidate list scrollable container uses max-height:9rem."""
+    import bill_processor.web.app as web_app
+    fake_candidates = [
+        {"name": "Kroger #1", "formatted_address": "100 Main St, Cincinnati, OH 45202",
+         "addr_line1": "100 Main St", "addr_line2": "Cincinnati, OH 45202",
+         "phone": "513-555-0001", "distance": 1.2},
+    ]
+    monkeypatch.setattr(web_app.addr_lookup, "lookup_google_places",
+                        lambda q, **kw: fake_candidates)
+    response = client.post("/vendors/lookup-address", data={"display_name": "Kroger"})
+    assert response.status_code == 200
+    assert b"max-height:9rem" in response.content
+    assert b"max-height:10rem" not in response.content

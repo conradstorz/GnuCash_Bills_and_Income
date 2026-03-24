@@ -3,7 +3,7 @@
   <div style="padding:0.3rem 0.6rem; background:#f5f5f5; font-size:0.8rem; color:#555">
     {{ candidates | length }} result{% if candidates | length != 1 %}s{% endif %} — select a match or edit the fields below manually
   </div>
-  <div style="max-height:10rem; overflow-y:auto">
+  <div style="max-height:9rem; overflow-y:auto">
   {% for c in candidates %}
   <div class="dropdown-item"
        style="border-top:1px solid #eee"
