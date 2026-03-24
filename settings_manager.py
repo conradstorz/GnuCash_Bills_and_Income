@@ -119,6 +119,8 @@ class SettingsManager:
             "terminal_width": config.TERMINAL_WIDTH,
             "log_level": config.LOG_LEVEL,
         }
+        self._settings.setdefault("ap_account_guid", None)
+        self._settings.setdefault("checking_account_guid", None)
     
     def save(self):
         """Persist current settings to JSON file."""
@@ -205,7 +207,29 @@ class SettingsManager:
     @log_level.setter
     def log_level(self, value: str):
         self.set("log_level", value.upper())
-    
+
+    @property
+    def ap_account_guid(self) -> Optional[str]:
+        return self._settings.get("ap_account_guid")
+
+    @ap_account_guid.setter
+    def ap_account_guid(self, value: Optional[str]) -> None:
+        self._settings["ap_account_guid"] = value
+        self.save()
+
+    @property
+    def checking_account_guid(self) -> Optional[str]:
+        return self._settings.get("checking_account_guid")
+
+    @checking_account_guid.setter
+    def checking_account_guid(self, value: Optional[str]) -> None:
+        self._settings["checking_account_guid"] = value
+        self.save()
+
+    @property
+    def processing_accounts_configured(self) -> bool:
+        return bool(self.ap_account_guid and self.checking_account_guid)
+
     def to_dict(self) -> dict:
         """Export all settings as dictionary."""
         return self._settings.copy()

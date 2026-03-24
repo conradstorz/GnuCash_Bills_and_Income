@@ -238,6 +238,64 @@ class TestSettingsManagerErrorHandling:
         assert nested_file.exists()
 
 
+class TestProcessingAccountSettings:
+    def test_ap_account_guid_defaults_to_none(self, tmp_path, monkeypatch):
+        from bill_processor import settings_manager
+        tmp_settings = tmp_path / "user_settings.json"
+        sm = settings_manager.SettingsManager(settings_file=tmp_settings)
+        assert sm.ap_account_guid is None
+
+    def test_checking_account_guid_defaults_to_none(self, tmp_path, monkeypatch):
+        from bill_processor import settings_manager
+        tmp_settings = tmp_path / "user_settings.json"
+        sm = settings_manager.SettingsManager(settings_file=tmp_settings)
+        assert sm.checking_account_guid is None
+
+    def test_processing_accounts_configured_false_when_both_none(self, tmp_path):
+        from bill_processor import settings_manager
+        tmp_settings = tmp_path / "user_settings.json"
+        sm = settings_manager.SettingsManager(settings_file=tmp_settings)
+        assert sm.processing_accounts_configured is False
+
+    def test_processing_accounts_configured_false_when_only_ap_set(self, tmp_path):
+        from bill_processor import settings_manager
+        tmp_settings = tmp_path / "user_settings.json"
+        sm = settings_manager.SettingsManager(settings_file=tmp_settings)
+        sm.ap_account_guid = "a" * 32
+        assert sm.processing_accounts_configured is False
+
+    def test_processing_accounts_configured_false_when_only_checking_set(self, tmp_path):
+        from bill_processor import settings_manager
+        tmp_settings = tmp_path / "user_settings.json"
+        sm = settings_manager.SettingsManager(settings_file=tmp_settings)
+        sm.checking_account_guid = "c" * 32
+        assert sm.processing_accounts_configured is False
+
+    def test_processing_accounts_configured_true_when_both_set(self, tmp_path):
+        from bill_processor import settings_manager
+        tmp_settings = tmp_path / "user_settings.json"
+        sm = settings_manager.SettingsManager(settings_file=tmp_settings)
+        sm.ap_account_guid = "a" * 32
+        sm.checking_account_guid = "c" * 32
+        assert sm.processing_accounts_configured is True
+
+    def test_ap_account_guid_persists_to_file(self, tmp_path):
+        from bill_processor import settings_manager
+        tmp_settings = tmp_path / "user_settings.json"
+        sm = settings_manager.SettingsManager(settings_file=tmp_settings)
+        sm.ap_account_guid = "a" * 32
+        sm2 = settings_manager.SettingsManager(settings_file=tmp_settings)
+        assert sm2.ap_account_guid == "a" * 32
+
+    def test_checking_account_guid_persists_to_file(self, tmp_path):
+        from bill_processor import settings_manager
+        tmp_settings = tmp_path / "user_settings.json"
+        sm = settings_manager.SettingsManager(settings_file=tmp_settings)
+        sm.checking_account_guid = "c" * 32
+        sm2 = settings_manager.SettingsManager(settings_file=tmp_settings)
+        assert sm2.checking_account_guid == "c" * 32
+
+
 class TestBackwardCompatibility:
     """Test backward compatibility with existing config.py imports."""
     
