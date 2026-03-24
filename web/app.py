@@ -161,64 +161,61 @@ def remove_from_queue(request: Request, index: int):
 
 
 def _process_one_bill(bill: dict) -> dict:
+    """Process a single bill: create → post → pay in GnuCash.
+
+    Returns {"ok": True} on success or {"ok": False, "error": "..."} on failure.
     """
-    Run create/post/pay for a single queued bill dict.
-    Returns {"ok": True} or {"ok": False, "error": str}.
-    """
+    ap_guid = settings.ap_account_guid
+    checking_guid = settings.checking_account_guid
+    if not ap_guid or not checking_guid:
+        return {
+            "ok": False,
+            "error": "Processing accounts not configured — visit Settings > Processing Accounts",
+        }
+
+    ap_account = gnucash_db.get_account_by_guid(ap_guid)
+    checking_account = gnucash_db.get_account_by_guid(checking_guid)
+    logger.info(
+        "Using A/P account: {} ({})", ap_account["name"], ap_guid[:8]
+    )
+    logger.info(
+        "Using checking account: {} ({})", checking_account["name"], checking_guid[:8]
+    )
+
     vm = VendorManager()
-    vendor_data, match_type = vm.find_vendor(bill["vendor_name"])
-    if not vendor_data:
+    vendor, match_type = vm.find_vendor(bill["vendor_name"])
+    if vendor is None:
         return {"ok": False, "error": f"Vendor not found: {bill['vendor_name']}"}
 
-    vendor_guid = vendor_data.get("gnucash_guid")
-    if not vendor_guid:
-        gc_vendor = gnucash_db.find_vendor_by_name(vendor_data.get("display_name", ""))
-        if not gc_vendor:
-            return {"ok": False, "error": f"No GnuCash record for vendor: {vendor_data.get('display_name')}"}
-        vendor_guid = gc_vendor["guid"]
+    expense_account_guid = vendor.get("expense_account_guid")
+    if not expense_account_guid:
+        return {
+            "ok": False,
+            "error": f"Vendor '{vendor['display_name']}' has no expense account configured",
+        }
 
-    # Get expense account GUID — check both possible field names in vendor_data
-    expense_guid = vendor_data.get("expense_account_guid") or vendor_data.get("expense_account")
-    # expense_account may hold a name string rather than a GUID; treat short strings as names
-    if expense_guid and len(str(expense_guid)) != 32:
-        expense_guid = None
-    if not expense_guid:
-        return {"ok": False, "error": f"No expense account GUID for vendor: {vendor_data.get('display_name')}"}
-
-    checking_accounts = gnucash_db.get_checking_accounts()
-    if not checking_accounts:
-        return {"ok": False, "error": "No checking account found in GnuCash"}
-    checking_guid = checking_accounts[0]["guid"]
-
-    bill_date = bill["date"]
     try:
         bill_guid = gnucash_db.create_bill(
-            vendor_guid=vendor_guid,
-            expense_account_guid=expense_guid,
+            vendor_guid=vendor["gnucash_guid"],
+            expense_account_guid=expense_account_guid,
             amount=bill["amount"],
             memo=bill.get("memo", ""),
-            bill_date=bill_date,
+            date=bill["date"],
         )
         gnucash_db.post_bill(
             bill_guid=bill_guid,
-            post_date=bill_date,
-            due_date=bill_date,
+            date=bill["date"],
+            ap_account_guid=ap_guid,
         )
         gnucash_db.pay_bill(
             bill_guid=bill_guid,
+            date=bill["date"],
             checking_account_guid=checking_guid,
-            payment_date=bill_date,
-            memo=bill.get("memo", ""),
             check_number=bill.get("check_number", ""),
         )
-        logger.info(f"Processed bill: {bill['vendor_name']} ${bill['amount']:.2f}")
         return {"ok": True}
-    except Exception as e:
-        logger.error(
-            f"Failed to process bill {bill['vendor_name']}: {e}. "
-            f"Bill may have been partially created in GnuCash — check for duplicates before retrying."
-        )
-        return {"ok": False, "error": f"{e} (bill may be partially created in GnuCash — check before retrying)"}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 @app.post("/bills/queue/process", response_class=HTMLResponse)
