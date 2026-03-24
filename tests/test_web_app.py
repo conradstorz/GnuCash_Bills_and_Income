@@ -587,3 +587,14 @@ class TestDashboardButtonGating:
         response = client.get("/partials/queued-bills")
         assert response.status_code == 200
         assert b"disabled" not in response.content
+
+
+def test_vendor_dropdown_add_item_uses_after_request_not_onclick(client):
+    """The '+ Add' item clears the dropdown via hx-on::after-request, not onclick."""
+    response = client.get("/vendors/search", params={"vendor_name": "TestQuery"})
+    assert response.status_code == 200
+    html = response.text
+    # New attribute must be present
+    assert "hx-on::after-request" in html
+    # The old synchronous onclick that cleared the dropdown must be gone from the add item.
+    assert "onclick=\"document.getElementById('vendor-dropdown').innerHTML=''\"" not in html

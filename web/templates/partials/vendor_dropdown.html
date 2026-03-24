@@ -10,7 +10,7 @@
   </div>
   {% endfor %}
   <div class="dropdown-item" style="color:#888; font-style:italic"
-       onclick="document.getElementById('vendor-dropdown').innerHTML=''"
+       hx-on::after-request="document.getElementById('vendor-dropdown').innerHTML=''"
        hx-get="/vendors/new-form?name={{ query | urlencode }}"
        hx-target="#new-vendor-section"
        hx-swap="innerHTML">
