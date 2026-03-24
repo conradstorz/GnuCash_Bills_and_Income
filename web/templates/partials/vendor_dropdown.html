@@ -4,16 +4,12 @@
        onclick='
          document.getElementById("vendor-input").value = {{ vendor.display_name | tojson }};
          document.getElementById("vendor-dropdown").innerHTML = "";
-         document.getElementById("new-vendor-section").innerHTML = "";
        '>
     {{ vendor.display_name }}
   </div>
   {% endfor %}
   <div class="dropdown-item" style="color:#888; font-style:italic"
-       hx-on::after-request="document.getElementById('vendor-dropdown').innerHTML=''"
-       hx-get="/vendors/new-form?name={{ query | urlencode }}"
-       hx-target="#new-vendor-section"
-       hx-swap="innerHTML">
+       onclick="VendorForm.open({{ query | tojson }})">
     + Add &ldquo;{{ query | e }}&rdquo; as new vendor&hellip;
   </div>
 </div>

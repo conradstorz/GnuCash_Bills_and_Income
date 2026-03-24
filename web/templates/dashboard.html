@@ -49,4 +49,46 @@
 
 </div><!-- /.dashboard-split -->
 
+<dialog id="vendor-dialog">
+  <div id="vendor-form-content">
+    <h3>New Vendor: <span id="vf-title"></span></h3>
+    <div id="vf-error" class="error-msg" style="display:none"></div>
+
+    <label for="vf-display-name">Display Name</label>
+    <input type="text" id="vf-display-name">
+
+    <div id="vf-candidates"></div>
+
+    <label for="vf-addr1">Address Line 1</label>
+    <input type="text" id="vf-addr1">
+
+    <label for="vf-addr2">Address Line 2</label>
+    <input type="text" id="vf-addr2">
+
+    <div style="display:flex; gap:1rem">
+      <div style="flex:1">
+        <label for="vf-city">City</label>
+        <input type="text" id="vf-city">
+      </div>
+      <div style="flex:1">
+        <label for="vf-state">State</label>
+        <input type="text" id="vf-state">
+      </div>
+      <div style="flex:1">
+        <label for="vf-zip">ZIP</label>
+        <input type="text" id="vf-zip">
+      </div>
+    </div>
+
+    <label for="vf-phone">Phone</label>
+    <input type="text" id="vf-phone">
+
+    <div style="margin-top:0.75rem; display:flex; gap:0.5rem">
+      <button type="button" class="btn-primary" onclick="VendorForm.create()">Create Vendor</button>
+      <button type="button" onclick="VendorForm.close()">Cancel</button>
+    </div>
+  </div>
+</dialog>
+<script src="/static/vendor-form.js"></script>
+
 {% endblock %}
