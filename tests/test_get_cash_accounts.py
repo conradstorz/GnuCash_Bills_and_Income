@@ -73,3 +73,18 @@ class TestGetCashAccounts:
             result = gnucash_db.get_cash_accounts()
         assert "name" in result[0]
         assert "guid" in result[0]
+
+
+class TestGetPayableAccounts:
+    def test_returns_list_of_dicts(self, db_connection):
+        from bill_processor import gnucash_db
+        result = gnucash_db.get_payable_accounts()
+        assert isinstance(result, list)
+
+    def test_each_item_has_required_keys(self, db_connection):
+        from bill_processor import gnucash_db
+        result = gnucash_db.get_payable_accounts()
+        for item in result:
+            assert "guid" in item
+            assert "name" in item
+            assert "description" in item

@@ -1654,10 +1654,21 @@ def get_checking_accounts() -> List[Dict]:
         return [dict(row) for row in cursor]
 
 
+def get_payable_accounts() -> List[Dict]:
+    """Get all non-placeholder Accounts Payable (PAYABLE-type) accounts."""
+    with get_connection() as conn:
+        cursor = conn.execute("""
+            SELECT guid, name, description FROM accounts
+            WHERE account_type = ? AND placeholder = ?
+            ORDER BY name
+        """, (config.ACCOUNT_TYPE_PAYABLE, config.PLACEHOLDER_FALSE))
+        return [dict(row) for row in cursor]
+
+
 def get_expense_accounts() -> List[Dict]:
     """
     Get all non-placeholder expense accounts.
-    
+
     Returns list of dicts with: guid, name, description
     """
     with get_connection() as conn:
