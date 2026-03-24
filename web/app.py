@@ -345,7 +345,7 @@ def new_vendor_form(request: Request, name: str = ""):
     })
 
 
-@app.post("/vendors/lookup-address", response_class=HTMLResponse)
+@app.post("/vendors/lookup-address")
 def lookup_address(
     request: Request,
     vendor_name: str = Form(""),
@@ -353,7 +353,7 @@ def lookup_address(
     addr_city: str = Form(""),
     addr_zip: str = Form(""),
 ):
-    """Look up address candidates and return a picker fragment."""
+    """Look up address candidates and return JSON."""
     parts = [p.strip() for p in [display_name, addr_city, addr_zip] if p.strip()]
     if not parts:
         parts = [vendor_name.strip()]
@@ -370,7 +370,7 @@ def lookup_address(
         logger.warning(f"Address lookup failed for '{search_name}': {e}")
         message = "Address lookup unavailable — enter manually"
 
-    return templates.TemplateResponse(request, "partials/address_candidates.html", {
+    return JSONResponse({
         "candidates": candidates,
         "message": message,
     })
