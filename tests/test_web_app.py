@@ -115,7 +115,7 @@ def test_new_vendor_form_city_zip_have_refinement_triggers(client):
     assert response.status_code == 200
     html = response.text
     assert 'hx-trigger="keyup changed delay:500ms"' in html
-    assert 'hx-include="closest form"' in html
+    assert 'hx-include="#new-vendor-form input"' in html
 
 
 def test_new_vendor_form_no_lookup_button(client):

@@ -1,60 +1,67 @@
-<div id="new-vendor-form">
+<div id="new-vendor-form"
+     onkeydown="if(event.key==='Enter' && event.target.tagName!=='BUTTON'){event.preventDefault();}">
   <strong>New Vendor: {{ vendor_name | e }}</strong>
   {% if message %}<p class="error-msg" style="margin-top:0.3rem">{{ message | e }}</p>{% endif %}
 
-  <form hx-post="/vendors/create" hx-target="#new-vendor-section" hx-swap="innerHTML">
-    <input type="hidden" name="vendor_name" value="{{ vendor_name | e }}">
+  <input type="hidden" name="vendor_name" id="new-vendor-name" value="{{ vendor_name | e }}">
 
-    <label for="new-vendor-display-name">Display Name</label>
-    <input type="text" name="display_name" id="new-vendor-display-name"
-           value="{{ display_name | e }}" required>
+  <label for="new-vendor-display-name">Display Name</label>
+  <input type="text" name="display_name" id="new-vendor-display-name"
+         value="{{ display_name | e }}">
 
-    <div id="address-candidates"
+  <div id="address-candidates"
+       hx-post="/vendors/lookup-address"
+       hx-trigger="load"
+       hx-swap="innerHTML"
+       hx-vals='{"display_name": {{ display_name | tojson }}}'>
+  </div>
+
+  <label for="new-vendor-addr1">Address Line 1</label>
+  <input type="text" name="addr_line1" id="new-vendor-addr1" value="{{ addr_line1 | e }}">
+
+  <label for="new-vendor-addr2">Address Line 2</label>
+  <input type="text" name="addr_line2" id="new-vendor-addr2" value="{{ addr_line2 | e }}">
+
+  <label for="new-vendor-city">City</label>
+  <input type="text" name="addr_city" id="new-vendor-city" value="{{ addr_city | e }}"
          hx-post="/vendors/lookup-address"
-         hx-trigger="load"
+         hx-trigger="keyup changed delay:500ms"
+         hx-target="#address-candidates"
          hx-swap="innerHTML"
-         hx-vals='{"display_name": {{ display_name | tojson }}}'>
+         hx-include="#new-vendor-form input">
+
+  <div style="display:flex; gap:1rem">
+    <div style="flex:1">
+      <label for="new-vendor-state">State</label>
+      <input type="text" name="addr_state" id="new-vendor-state"
+             value="{{ addr_state | e }}" style="width:100%">
     </div>
-
-    <label for="new-vendor-addr1">Address Line 1</label>
-    <input type="text" name="addr_line1" id="new-vendor-addr1" value="{{ addr_line1 | e }}">
-
-    <label for="new-vendor-addr2">Address Line 2</label>
-    <input type="text" name="addr_line2" id="new-vendor-addr2" value="{{ addr_line2 | e }}">
-
-    <label for="new-vendor-city">City</label>
-    <input type="text" name="addr_city" id="new-vendor-city" value="{{ addr_city | e }}"
-           hx-post="/vendors/lookup-address"
-           hx-trigger="keyup changed delay:500ms"
-           hx-target="#address-candidates"
-           hx-swap="innerHTML"
-           hx-include="closest form">
-
-    <div style="display:flex; gap:1rem">
-      <div style="flex:1">
-        <label for="new-vendor-state">State</label>
-        <input type="text" name="addr_state" id="new-vendor-state"
-               value="{{ addr_state | e }}" style="width:100%">
-      </div>
-      <div style="flex:1">
-        <label for="new-vendor-zip">ZIP</label>
-        <input type="text" name="addr_zip" id="new-vendor-zip"
-               value="{{ addr_zip | e }}" style="width:100%"
-               hx-post="/vendors/lookup-address"
-               hx-trigger="keyup changed delay:500ms"
-               hx-target="#address-candidates"
-               hx-swap="innerHTML"
-               hx-include="closest form">
-      </div>
+    <div style="flex:1">
+      <label for="new-vendor-zip">ZIP</label>
+      <input type="text" name="addr_zip" id="new-vendor-zip"
+             value="{{ addr_zip | e }}" style="width:100%"
+             hx-post="/vendors/lookup-address"
+             hx-trigger="keyup changed delay:500ms"
+             hx-target="#address-candidates"
+             hx-swap="innerHTML"
+             hx-include="#new-vendor-form input">
     </div>
+  </div>
 
-    <label for="new-vendor-phone">Phone</label>
-    <input type="text" name="addr_phone" id="new-vendor-phone" value="{{ addr_phone | e }}">
+  <label for="new-vendor-phone">Phone</label>
+  <input type="text" name="addr_phone" id="new-vendor-phone" value="{{ addr_phone | e }}">
 
-    <div style="margin-top:0.75rem; display:flex; gap:0.5rem">
-      <button type="submit" class="btn-primary">Create Vendor</button>
-      <button type="button"
-        onclick="document.getElementById('new-vendor-section').innerHTML='';document.getElementById('vendor-dropdown').innerHTML='';document.getElementById('vendor-input').value='';">Cancel</button>
-    </div>
-  </form>
+  <div style="margin-top:0.75rem; display:flex; gap:0.5rem">
+    <button type="button" class="btn-primary"
+            hx-post="/vendors/create"
+            hx-target="#new-vendor-section"
+            hx-swap="innerHTML"
+            hx-include="#new-vendor-form input">
+      Create Vendor
+    </button>
+    <button type="button"
+      onclick="document.getElementById('new-vendor-section').innerHTML='';document.getElementById('vendor-dropdown').innerHTML='';document.getElementById('vendor-input').value='';">
+      Cancel
+    </button>
+  </div>
 </div>
