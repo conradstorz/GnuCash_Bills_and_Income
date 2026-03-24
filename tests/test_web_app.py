@@ -237,13 +237,16 @@ def test_edit_bill_clears_check_number(client, tmp_queue):
     assert content.endswith("2026-03-01")
 
 
-def test_create_vendor_empty_name_rejected(client):
+def test_create_vendor_empty_name_returns_json_error(client):
+    """Creating a vendor with empty name returns JSON error."""
     response = client.post("/vendors/create", data={
         "vendor_name": "",
         "display_name": "",
     })
     assert response.status_code == 200
-    assert b"error" in response.content.lower() or b"required" in response.content.lower()
+    data = response.json()
+    assert data["ok"] is False
+    assert "required" in data["error"].lower()
 
 
 def test_process_all_empty_queue(client, tmp_queue):

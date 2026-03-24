@@ -376,7 +376,7 @@ def lookup_address(
     })
 
 
-@app.post("/vendors/create", response_class=HTMLResponse)
+@app.post("/vendors/create")
 def create_vendor_route(
     request: Request,
     vendor_name: str = Form(""),
@@ -388,10 +388,10 @@ def create_vendor_route(
     addr_zip: str = Form(""),
     addr_phone: str = Form(""),
 ):
-    """Create vendor in GnuCash + JSON cache, return confirmation fragment."""
+    """Create vendor in GnuCash + JSON cache, return JSON result."""
     display_name = display_name.strip() or vendor_name.strip()
     if not display_name:
-        return HTMLResponse('<p class="error-msg">Vendor name is required.</p>')
+        return JSONResponse({"ok": False, "error": "Vendor name is required."})
 
     try:
         guid = gnucash_db.create_vendor(
@@ -419,14 +419,10 @@ def create_vendor_route(
         }
         vm.save()
         logger.info(f"Created vendor '{display_name}' with GUID {guid}")
-        # Return JS to update the vendor input field, plus a success message
-        return HTMLResponse(
-            f'<div class="success-msg">&#10003; Created vendor: {html.escape(display_name)}</div>'
-            f'<script>document.getElementById("vendor-input").value = {json.dumps(display_name)};</script>'
-        )
+        return JSONResponse({"ok": True, "display_name": display_name, "guid": guid})
     except Exception as e:
         logger.error(f"Failed to create vendor '{display_name}': {e}")
-        return HTMLResponse(f'<p class="error-msg">Failed to create vendor: {e}</p>')
+        return JSONResponse({"ok": False, "error": str(e)})
 
 
 @app.post("/vendors/sync", response_class=HTMLResponse)
