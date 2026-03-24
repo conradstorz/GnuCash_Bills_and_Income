@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Processing Accounts - GnuCash Bill Processor{% endblock %}
+{% block content %}
+<div class="settings-container">
+  <h2>Processing Accounts</h2>
+  <p class="help-text">
+    Choose the A/P and checking accounts used when bills are posted and paid.
+    Both must be selected before bills can be processed.
+  </p>
+
+  {% include "partials/processing_ap_section.html" %}
+  {% include "partials/processing_checking_section.html" %}
+
+  <div class="settings-footer">
+    <a href="/settings" class="btn-secondary">&#8592; Back to Settings</a>
+  </div>
+</div>
+{% endblock %}

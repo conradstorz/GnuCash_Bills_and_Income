@@ -1,0 +1,24 @@
+<section class="settings-section" id="ap-section">
+  <h3>Accounts Payable Account</h3>
+  <p class="help-text">Select the A/P account used when posting bills.</p>
+  {% if error_ap %}
+  <p class="error-msg">&#10007; {{ error_ap }}</p>
+  {% endif %}
+  {% if saved_ap %}
+  <p class="success-msg">&#10003; Saved</p>
+  {% endif %}
+  {% for acct in payable_accounts %}
+  <label class="account-checkbox">
+    <input type="radio" name="ap_account_guid" value="{{ acct.guid }}"
+           {% if acct.guid == current_ap_guid %}checked{% endif %}
+           hx-post="/settings/processing-accounts/ap-account"
+           hx-include="[name='ap_account_guid']"
+           hx-target="#ap-section"
+           hx-swap="outerHTML">
+    <span class="account-name">{{ acct.name }}</span>
+  </label>
+  {% endfor %}
+  {% if not payable_accounts %}
+  <p class="help-text">No A/P accounts found in GnuCash.</p>
+  {% endif %}
+</section>

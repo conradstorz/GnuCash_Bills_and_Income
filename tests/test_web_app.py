@@ -456,3 +456,72 @@ class TestProcessQueueRoutes:
         remaining = tmp_queue.read_text()
         assert "Acme Electric" not in remaining
         assert "Unknown Vendor" in remaining
+
+
+@pytest.fixture
+def isolated_settings(monkeypatch):
+    """Fresh SettingsManager backed by a temp file, swapped into web_app.settings."""
+    import tempfile, os
+    from pathlib import Path as _Path
+    from bill_processor import settings_manager
+    from bill_processor.web import app as web_app
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        tmp_path = f.name
+    try:
+        fresh = settings_manager.SettingsManager(settings_file=_Path(tmp_path))
+        monkeypatch.setattr(web_app, "settings", fresh)
+        yield fresh
+    finally:
+        os.unlink(tmp_path)
+
+
+class TestProcessingAccountsSettings:
+    AP_GUID = "e" * 32
+    CHECKING_GUID = "c" * 32
+
+    def test_get_page_returns_200(self, client, isolated_settings, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_payable_accounts",
+                            lambda: [{"guid": self.AP_GUID, "name": "Accounts Payable", "description": ""}])
+        monkeypatch.setattr(web_app.gnucash_db, "get_checking_accounts",
+                            lambda: [{"guid": self.CHECKING_GUID, "name": "Checking", "description": ""}])
+        response = client.get("/settings/processing-accounts")
+        assert response.status_code == 200
+
+    def test_save_ap_account_persists_to_settings(self, client, isolated_settings, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_payable_accounts",
+                            lambda: [{"guid": self.AP_GUID, "name": "Accounts Payable", "description": ""}])
+        response = client.post("/settings/processing-accounts/ap-account",
+                               data={"ap_account_guid": self.AP_GUID})
+        assert response.status_code == 200
+        assert isolated_settings.ap_account_guid == self.AP_GUID
+
+    def test_save_checking_account_persists_to_settings(self, client, isolated_settings, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_checking_accounts",
+                            lambda: [{"guid": self.CHECKING_GUID, "name": "Checking", "description": ""}])
+        response = client.post("/settings/processing-accounts/checking-account",
+                               data={"checking_account_guid": self.CHECKING_GUID})
+        assert response.status_code == 200
+        assert isolated_settings.checking_account_guid == self.CHECKING_GUID
+
+    def test_save_invalid_ap_account_guid_returns_error(self, client, isolated_settings, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_payable_accounts",
+                            lambda: [{"guid": self.AP_GUID, "name": "Accounts Payable", "description": ""}])
+        response = client.post("/settings/processing-accounts/ap-account",
+                               data={"ap_account_guid": "z" * 32})
+        assert response.status_code == 200
+        assert b"error" in response.content.lower() or b"invalid" in response.content.lower()
+        assert isolated_settings.ap_account_guid is None  # unchanged
+
+    def test_save_invalid_checking_account_guid_returns_error(self, client, isolated_settings, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_checking_accounts",
+                            lambda: [{"guid": self.CHECKING_GUID, "name": "Checking", "description": ""}])
+        response = client.post("/settings/processing-accounts/checking-account",
+                               data={"checking_account_guid": "z" * 32})
+        assert response.status_code == 200
+        assert b"error" in response.content.lower() or b"invalid" in response.content.lower()
+        assert isolated_settings.checking_account_guid is None  # unchanged

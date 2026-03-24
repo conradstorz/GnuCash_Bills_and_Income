@@ -929,6 +929,59 @@ async def reset_settings(request: Request):
     return RedirectResponse(url="/settings", status_code=303)
 
 
+@app.get("/settings/processing-accounts", response_class=HTMLResponse)
+def get_processing_accounts_settings(request: Request):
+    """Render the processing accounts selection page."""
+    return templates.TemplateResponse(request, "settings_processing_accounts.html", {
+        "payable_accounts": gnucash_db.get_payable_accounts(),
+        "checking_accounts": gnucash_db.get_checking_accounts(),
+        "current_ap_guid": settings.ap_account_guid,
+        "current_checking_guid": settings.checking_account_guid,
+    })
+
+
+@app.post("/settings/processing-accounts/ap-account", response_class=HTMLResponse)
+def save_ap_account(request: Request, ap_account_guid: str = Form(...)):
+    """HTMX — save selected A/P account GUID and return updated section."""
+    payable_accounts = gnucash_db.get_payable_accounts()
+    valid_guids = {a["guid"] for a in payable_accounts}
+    if ap_account_guid not in valid_guids:
+        return templates.TemplateResponse(request, "partials/processing_ap_section.html", {
+            "payable_accounts": payable_accounts,
+            "current_ap_guid": settings.ap_account_guid,
+            "error_ap": "Invalid account — please select from the list.",
+            "saved_ap": False,
+        })
+    settings.ap_account_guid = ap_account_guid
+    return templates.TemplateResponse(request, "partials/processing_ap_section.html", {
+        "payable_accounts": payable_accounts,
+        "current_ap_guid": ap_account_guid,
+        "error_ap": None,
+        "saved_ap": True,
+    })
+
+
+@app.post("/settings/processing-accounts/checking-account", response_class=HTMLResponse)
+def save_checking_account(request: Request, checking_account_guid: str = Form(...)):
+    """HTMX — save selected checking account GUID and return updated section."""
+    checking_accounts = gnucash_db.get_checking_accounts()
+    valid_guids = {a["guid"] for a in checking_accounts}
+    if checking_account_guid not in valid_guids:
+        return templates.TemplateResponse(request, "partials/processing_checking_section.html", {
+            "checking_accounts": checking_accounts,
+            "current_checking_guid": settings.checking_account_guid,
+            "error_checking": "Invalid account — please select from the list.",
+            "saved_checking": False,
+        })
+    settings.checking_account_guid = checking_account_guid
+    return templates.TemplateResponse(request, "partials/processing_checking_section.html", {
+        "checking_accounts": checking_accounts,
+        "current_checking_guid": checking_account_guid,
+        "error_checking": None,
+        "saved_checking": True,
+    })
+
+
 @app.post("/shutdown")
 def shutdown():
     """Stop the server. Uses os._exit for reliable cross-platform termination."""

@@ -1,0 +1,24 @@
+<section class="settings-section" id="checking-section">
+  <h3>Checking Account</h3>
+  <p class="help-text">Select the bank account used when paying bills.</p>
+  {% if error_checking %}
+  <p class="error-msg">&#10007; {{ error_checking }}</p>
+  {% endif %}
+  {% if saved_checking %}
+  <p class="success-msg">&#10003; Saved</p>
+  {% endif %}
+  {% for acct in checking_accounts %}
+  <label class="account-checkbox">
+    <input type="radio" name="checking_account_guid" value="{{ acct.guid }}"
+           {% if acct.guid == current_checking_guid %}checked{% endif %}
+           hx-post="/settings/processing-accounts/checking-account"
+           hx-include="[name='checking_account_guid']"
+           hx-target="#checking-section"
+           hx-swap="outerHTML">
+    <span class="account-name">{{ acct.name }}</span>
+  </label>
+  {% endfor %}
+  {% if not checking_accounts %}
+  <p class="help-text">No bank accounts found in GnuCash.</p>
+  {% endif %}
+</section>
