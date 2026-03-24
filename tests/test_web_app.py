@@ -91,6 +91,50 @@ def test_new_vendor_form_renders(client):
     assert b"TestVendor" in response.content
 
 
+def test_new_vendor_form_auto_fires_address_search_on_load(client):
+    """#address-candidates has hx-trigger=load to auto-fire address search."""
+    response = client.get("/vendors/new-form", params={"name": "Kroger"})
+    assert response.status_code == 200
+    html = response.text
+    assert 'hx-trigger="load"' in html
+    assert 'hx-post="/vendors/lookup-address"' in html
+
+
+def test_new_vendor_form_hx_vals_contains_display_name(client):
+    """hx-vals on #address-candidates includes the rendered vendor display name as JSON."""
+    response = client.get("/vendors/new-form", params={"name": "Kroger"})
+    assert response.status_code == 200
+    # The hx-vals attribute must contain the JSON key "display_name" (with quotes)
+    # and the rendered vendor name. Neither of these patterns exist in the current
+    # template, so this assertion will correctly FAIL before the implementation.
+    assert '"display_name": "Kroger"' in response.text
+
+
+def test_new_vendor_form_city_zip_have_refinement_triggers(client):
+    """City and ZIP inputs carry HTMX refinement triggers."""
+    response = client.get("/vendors/new-form", params={"name": "Kroger"})
+    assert response.status_code == 200
+    html = response.text
+    assert 'hx-trigger="keyup changed delay:500ms"' in html
+    assert 'hx-include="closest form"' in html
+
+
+def test_new_vendor_form_no_lookup_button(client):
+    """The manual 'Look Up Address' button has been removed."""
+    response = client.get("/vendors/new-form", params={"name": "Kroger"})
+    assert response.status_code == 200
+    assert b"Look Up Address" not in response.content
+
+
+def test_new_vendor_form_cancel_clears_vendor_input(client):
+    """Cancel button onclick clears #new-vendor-section, #vendor-dropdown, and #vendor-input."""
+    response = client.get("/vendors/new-form", params={"name": "Kroger"})
+    assert response.status_code == 200
+    html = response.text
+    assert "vendor-dropdown" in html
+    assert "vendor-input" in html
+
+
 def test_address_lookup_returns_form(client):
     # With no API keys / no OSM results, route returns a "no results" error partial — not a 500.
     response = client.post("/vendors/lookup-address", data={"vendor_name": "Acme Electric"})

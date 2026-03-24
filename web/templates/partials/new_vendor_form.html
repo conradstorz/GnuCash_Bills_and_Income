@@ -9,14 +9,12 @@
     <input type="text" name="display_name" id="new-vendor-display-name"
            value="{{ display_name | e }}" required>
 
-    <div style="margin-top:0.5rem">
-      <button type="button" class="btn-primary"
-        hx-post="/vendors/lookup-address"
-        hx-include="[name='display_name']"
-        hx-target="#address-candidates"
-        hx-swap="innerHTML">Look Up Address</button>
+    <div id="address-candidates"
+         hx-post="/vendors/lookup-address"
+         hx-trigger="load"
+         hx-swap="innerHTML"
+         hx-vals='{"display_name": "{{ display_name | e }}"}'>
     </div>
-    <div id="address-candidates"></div>
 
     <label for="new-vendor-addr1">Address Line 1</label>
     <input type="text" name="addr_line1" id="new-vendor-addr1" value="{{ addr_line1 | e }}">
@@ -25,7 +23,12 @@
     <input type="text" name="addr_line2" id="new-vendor-addr2" value="{{ addr_line2 | e }}">
 
     <label for="new-vendor-city">City</label>
-    <input type="text" name="addr_city" id="new-vendor-city" value="{{ addr_city | e }}">
+    <input type="text" name="addr_city" id="new-vendor-city" value="{{ addr_city | e }}"
+           hx-post="/vendors/lookup-address"
+           hx-trigger="keyup changed delay:500ms"
+           hx-target="#address-candidates"
+           hx-swap="innerHTML"
+           hx-include="closest form">
 
     <div style="display:flex; gap:1rem">
       <div style="flex:1">
@@ -36,7 +39,12 @@
       <div style="flex:1">
         <label for="new-vendor-zip">ZIP</label>
         <input type="text" name="addr_zip" id="new-vendor-zip"
-               value="{{ addr_zip | e }}" style="width:100%">
+               value="{{ addr_zip | e }}" style="width:100%"
+               hx-post="/vendors/lookup-address"
+               hx-trigger="keyup changed delay:500ms"
+               hx-target="#address-candidates"
+               hx-swap="innerHTML"
+               hx-include="closest form">
       </div>
     </div>
 
@@ -46,7 +54,7 @@
     <div style="margin-top:0.75rem; display:flex; gap:0.5rem">
       <button type="submit" class="btn-primary">Create Vendor</button>
       <button type="button"
-        onclick="document.getElementById('new-vendor-section').innerHTML=''">Cancel</button>
+        onclick="document.getElementById('new-vendor-section').innerHTML='';document.getElementById('vendor-dropdown').innerHTML='';document.getElementById('vendor-input').value='';">Cancel</button>
     </div>
   </form>
 </div>
