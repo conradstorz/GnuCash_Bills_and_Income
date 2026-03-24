@@ -99,6 +99,40 @@ def test_address_lookup_returns_form(client):
     assert b"<form" in response.content or b"No results found" in response.content
 
 
+def test_lookup_address_combines_city_and_zip(client, monkeypatch):
+    """Route builds combined query from display_name + addr_city + addr_zip."""
+    import bill_processor.web.app as web_app
+    captured = []
+    monkeypatch.setattr(web_app.addr_lookup, "lookup_google_places",
+                        lambda q, **kw: captured.append(q) or [])
+    monkeypatch.setattr(web_app.addr_lookup, "lookup_openstreetmap",
+                        lambda q, **kw: [])
+    response = client.post("/vendors/lookup-address", data={
+        "display_name": "Kroger",
+        "addr_city": "Cincinnati",
+        "addr_zip": "45202",
+    })
+    assert response.status_code == 200
+    assert captured == ["Kroger Cincinnati 45202"]
+
+
+def test_lookup_address_skips_empty_refinement_fields(client, monkeypatch):
+    """Blank city/zip fields are omitted from the combined query."""
+    import bill_processor.web.app as web_app
+    captured = []
+    monkeypatch.setattr(web_app.addr_lookup, "lookup_google_places",
+                        lambda q, **kw: captured.append(q) or [])
+    monkeypatch.setattr(web_app.addr_lookup, "lookup_openstreetmap",
+                        lambda q, **kw: [])
+    response = client.post("/vendors/lookup-address", data={
+        "display_name": "Kroger",
+        "addr_city": "",
+        "addr_zip": "45202",
+    })
+    assert response.status_code == 200
+    assert captured == ["Kroger 45202"]
+
+
 def test_add_bill_with_check_number(client, tmp_queue):
     response = client.post("/bills/queue", data={
         "vendor_name": "Acme Electric",

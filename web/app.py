@@ -346,9 +346,18 @@ def new_vendor_form(request: Request, name: str = ""):
 
 
 @app.post("/vendors/lookup-address", response_class=HTMLResponse)
-def lookup_address(request: Request, vendor_name: str = Form(""), display_name: str = Form("")):
+def lookup_address(
+    request: Request,
+    vendor_name: str = Form(""),
+    display_name: str = Form(""),
+    addr_city: str = Form(""),
+    addr_zip: str = Form(""),
+):
     """Look up address candidates and return a picker fragment."""
-    search_name = display_name.strip() or vendor_name.strip()
+    parts = [p.strip() for p in [display_name, addr_city, addr_zip] if p.strip()]
+    if not parts:
+        parts = [vendor_name.strip()]
+    search_name = " ".join(parts)
     candidates = []
     message = ""
     try:
