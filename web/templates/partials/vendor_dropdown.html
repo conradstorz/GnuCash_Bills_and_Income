@@ -9,7 +9,7 @@
   </div>
   {% endfor %}
   <div class="dropdown-item" style="color:#888; font-style:italic"
-       onclick="VendorForm.open({{ query | tojson }})">
+       onclick='VendorForm.open({{ query | tojson }})'>
     + Add &ldquo;{{ query | e }}&rdquo; as new vendor&hellip;
   </div>
 </div>
