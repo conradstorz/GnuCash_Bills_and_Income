@@ -72,6 +72,7 @@ const VendorForm = (() => {
 
   async function lookupAddress() {
     const gen = ++requestGen;
+    candidates.innerHTML = '<p class="vf-status">Searching\u2026</p>';
     const formData = new FormData();
     formData.append("vendor_name", vendorName);
     formData.append("display_name", displayName.value);
