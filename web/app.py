@@ -416,7 +416,7 @@ def sync_vendors(request: Request):
     error = None
     try:
         util = VendorSyncUtility()
-        util.sync_all_vendors()
+        util.sync_bidirectional()
     except Exception as e:
         error = str(e)
         logger.error(f"Vendor sync failed: {e}")

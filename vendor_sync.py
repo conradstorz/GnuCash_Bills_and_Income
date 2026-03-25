@@ -40,8 +40,7 @@ class VendorSyncUtility:
     """Utility to sync vendors from JSON database to GnuCash."""
     
     def __init__(self):
-        # Fix: Use the correct path structure from your project
-        project_root = Path(__file__).parent.parent  # Go up from src/ to project root
+        project_root = Path(__file__).parent
         data_dir = project_root / "data"
         self.vendor_db_path = data_dir / "vendor_database.json"
         
