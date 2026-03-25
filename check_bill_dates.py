@@ -155,7 +155,7 @@ def main():
     print("BILL DATE CHECKER")
     print("=" * 70)
     print()
-    print("Scanning for bills with missing or invalid date fields...")
+    logger.info("Scanning for bills with missing or invalid date fields...")
     print()
     
     # Check for --fix flag and optional date
@@ -170,7 +170,7 @@ def main():
                 print(f"Using default date: {default_date}")
                 print()
             except ValueError:
-                print(f"Error: Invalid date format '{sys.argv[i + 1]}'. Use YYYY-MM-DD")
+                logger.error(f"Invalid date format '{sys.argv[i + 1]}'. Use YYYY-MM-DD")
                 return 1
     
     # Find problems
@@ -181,6 +181,7 @@ def main():
         return 0
     
     # Report findings
+    logger.warning(f"Found {len(results)} bills with missing date fields")
     print(f"⚠️  Found {len(results)} bills with missing date fields:")
     print()
     print(f"{'Bill ID':<12} {'Vendor':<25} {'Posted':<8} {'Issues'}")
@@ -208,6 +209,7 @@ def main():
     print()
     
     if fix_mode:
+        logger.info("--fix flag detected, fixing bills")
         print("--fix flag detected. Fixing bills...")
         print()
         print("Strategy:")
@@ -220,6 +222,7 @@ def main():
         print()
         fixed = fix_missing_dates(results, default_date)
         print()
+        logger.info(f"Successfully fixed {fixed} bills")
         print(f"✓ Successfully fixed {fixed} bills!")
         print()
         print("You should verify the changes in GnuCash.")
@@ -233,6 +236,7 @@ def main():
         print("To specify a custom date for missing fields:")
         print("  uv run python -m bill_processor.check_bill_dates --fix --date 2026-01-28")
         print()
+        logger.warning("--fix will modify the GnuCash database — make a backup first")
         print("⚠️  WARNING: This will modify your GnuCash database.")
         print("   Make a backup before using --fix!")
         return 1

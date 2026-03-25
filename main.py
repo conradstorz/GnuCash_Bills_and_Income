@@ -94,7 +94,7 @@ def process_bill(
         logger.debug(f"Expense account GUID: {expense_acct_guid}")
     except ValueError as e:
         log_error_with_context(e, "Failed to get expense account", vendor_name=vendor_name)
-        print(f"  ✗ ERROR: {e}")
+        logger.error(f"Failed to get expense account: {e}")
         log_function_exit("process_bill", False)
         return False
     
@@ -108,7 +108,6 @@ def process_bill(
             logger.debug(f"Found vendor GUID in GnuCash: {vendor_guid}")
         else:
             logger.error(f"Could not find vendor GUID for: {vendor_data.get('display_name')}")
-            print(f"  ✗ ERROR: Could not find vendor GUID")
             log_function_exit("process_bill", False)
             return False
     
@@ -212,8 +211,8 @@ def process_input_file(input_path: Path) -> dict:
     checking_accounts = gnucash_db.get_checking_accounts()
     
     if not checking_accounts:
-        print("  ERROR: No checking accounts found in GnuCash")
-        print("  Please create a checking account first.")
+        logger.error("No checking accounts found in GnuCash")
+        logger.info("Please create a checking account first.")
         return {'total': len(bills), 'success': 0, 'failed': 0, 'skipped': len(bills)}
     
     for i, account in enumerate(checking_accounts, 1):
@@ -373,9 +372,7 @@ def main():
     # Verify database
     logger.debug("Testing database connection")
     if not gnucash_db.test_connection():
-        logger.error("Cannot connect to GnuCash database")
-        print("\nERROR: Cannot connect to GnuCash database.")
-        print(f"Check path in config.py: {config.GNUCASH_DB_PATH}")
+        logger.error(f"Cannot connect to GnuCash database. Check path in config.py: {config.GNUCASH_DB_PATH}")
         return 1
     
     input_path = Path(args.input_file)
@@ -416,7 +413,7 @@ def main():
         
     except FileNotFoundError as e:
         log_error_with_context(e, "Input file not found")
-        print(f"\nERROR: {e}")
+        logger.error(f"Input file not found: {e}")
         return 1
     except KeyboardInterrupt:
         logger.info("Processing cancelled by user")

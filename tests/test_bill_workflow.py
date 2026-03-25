@@ -1,5 +1,6 @@
 import pytest
 import sqlite3
+from loguru import logger
 from bill_processor import gnucash_db
 
 
@@ -403,26 +404,26 @@ class TestBillWorkflow:
         
         conn.close()
         
-        print(f"\n{'='*60}")
-        print("MANUAL VERIFICATION REQUIRED")
-        print(f"{'='*60}")
-        print(f"A test bill has been created in the database copy at:")
-        print(f"  {db_connection}")
-        print(f"")
-        print(f"Bill details:")
-        print(f"  Vendor: {vendor_name}")
-        print(f"  Bill ID: {bill_id}")
-        print(f"  Amount: ${bill_data['amount']/100:.2f}")
-        print(f"  Memo: MANUAL_TEST_BILL - Please verify in GnuCash")
-        print(f"")
-        print(f"To verify:")
-        print(f"1. Copy this test database over your real database (BACKUP FIRST!)")
-        print(f"2. Open GnuCash")
-        print(f"3. Check Business → Vendor → Process Payment")
-        print(f"4. Verify the bill appears as PAID")
-        print(f"5. Check that vendor address shows on payment")
-        print(f"6. Verify memo appears in check register")
-        print(f"{'='*60}")
+        logger.info(f"\n{'='*60}")
+        logger.info("MANUAL VERIFICATION REQUIRED")
+        logger.info(f"{'='*60}")
+        logger.info(f"A test bill has been created in the database copy at:")
+        logger.info(f"  {db_connection}")
+        logger.info("")
+        logger.info("Bill details:")
+        logger.info(f"  Vendor: {vendor_name}")
+        logger.info(f"  Bill ID: {bill_id}")
+        logger.info(f"  Amount: ${bill_data['amount']/100:.2f}")
+        logger.info("  Memo: MANUAL_TEST_BILL - Please verify in GnuCash")
+        logger.info("")
+        logger.info("To verify:")
+        logger.info("1. Copy this test database over your real database (BACKUP FIRST!)")
+        logger.info("2. Open GnuCash")
+        logger.info("3. Check Business → Vendor → Process Payment")
+        logger.info("4. Verify the bill appears as PAID")
+        logger.info("5. Check that vendor address shows on payment")
+        logger.info("6. Verify memo appears in check register")
+        logger.info(f"{'='*60}")
         
         # This test always "passes" - it's just for manual verification
         assert True

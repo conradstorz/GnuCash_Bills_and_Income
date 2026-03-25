@@ -136,7 +136,7 @@ def main():
     print("BILL QUANTITY CHECKER")
     print("=" * 70)
     print()
-    print("Scanning for bill entries with incorrect quantities...")
+    logger.info("Scanning for bill entries with incorrect quantities...")
     print()
     
     # Check for --fix flag
@@ -150,6 +150,7 @@ def main():
         return 0
     
     # Report findings
+    logger.warning(f"Found {len(results)} bill entries with incorrect quantities")
     print(f"⚠️  Found {len(results)} bill entries with incorrect quantities:")
     print()
     print(f"{'Bill ID':<12} {'Vendor':<25} {'Date':<12} {'Qty':<8} {'Price':<12} {'Total':<12}")
@@ -178,10 +179,12 @@ def main():
     print()
     
     if fix_mode:
+        logger.info("--fix flag detected, fixing entries")
         print("--fix flag detected. Fixing entries...")
         print()
         fixed = fix_incorrect_quantities(results)
         print()
+        logger.info(f"Successfully fixed {fixed} entries")
         print(f"✓ Successfully fixed {fixed} entries!")
         print()
         print("You should verify the changes in GnuCash.")
@@ -190,6 +193,7 @@ def main():
         print("To fix these entries automatically, run:")
         print("  uv run python -m bill_processor.check_bill_quantities --fix")
         print()
+        logger.warning("--fix will modify the GnuCash database — make a backup first")
         print("⚠️  WARNING: This will modify your GnuCash database.")
         print("   Make a backup before using --fix!")
         return 1

@@ -271,7 +271,6 @@ def create_new_vendor(self, search_name: str, display_name: str = None) -> str:
         logger.info("All address fields populated for GnuCash")
     
     # Create vendor in GnuCash with comprehensive logging
-    print(f"\nCreating vendor in GnuCash...")
     logger.info(f"Calling gnucash_db.create_vendor for '{display_name}'...")
     logger.debug("create_vendor parameters:")
     logger.debug(f"  name='{display_name}'")
@@ -371,8 +370,7 @@ def create_new_vendor(self, search_name: str, display_name: str = None) -> str:
     logger.debug("Refreshing GnuCash vendor cache...")
     self.refresh_gnucash_vendors()
     
-    print(f"\n✓ Vendor created: {display_name} (ID: {vendor_id})")
-    logger.info(f"🎉 Vendor creation completed successfully: '{display_name}' (ID: {vendor_id}, GUID: {vendor_guid})")
+    logger.info(f"Vendor creation completed successfully: '{display_name}' (ID: {vendor_id}, GUID: {vendor_guid})")
     
     return vendor_data
     

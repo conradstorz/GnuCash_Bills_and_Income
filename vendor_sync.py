@@ -100,11 +100,11 @@ class VendorSyncUtility:
                 logger.warning(
                     f"Found {len(vendor_keys)} vendors sharing GUID {guid}: {', '.join(vendor_names)}"
                 )
-                print(f"[WARN]  Duplicate vendors found (same GUID {guid[:8]}...):")
+                logger.warning(f"Duplicate vendors found (same GUID {guid[:8]}...):")
                 for i, (key, name) in enumerate(zip(vendor_keys, vendor_names)):
                     status = "(keeping)" if i == 0 else "(removing)" if auto_fix else "(duplicate)"
-                    print(f"   {i+1}. {name} [{key}] {status}")
-                
+                    logger.warning(f"  {i+1}. {name} [{key}] {status}")
+
                 if auto_fix:
                     # Keep the first entry, remove the rest
                     keys_to_remove = vendor_keys[1:]
@@ -112,8 +112,8 @@ class VendorSyncUtility:
                         logger.info(f"Removing duplicate vendor: {key} ({self.vendors_data[key].get('display_name')})")
                         del self.vendors_data[key]
                         result['duplicates_removed'] += 1
-                    
-                    print(f"   [OK] Removed {len(keys_to_remove)} duplicate(s), kept {vendor_keys[0]}")
+
+                    logger.info(f"Removed {len(keys_to_remove)} duplicate(s), kept {vendor_keys[0]}")
         
         return result
     
@@ -121,8 +121,8 @@ class VendorSyncUtility:
         """Load vendor database from JSON file."""
         try:
             if not self.vendor_db_path.exists():
-                print(f"[ERROR] Vendor database not found: {self.vendor_db_path}")
-                print(f"Expected location: {self.vendor_db_path.absolute()}")
+                logger.error(f"Vendor database not found: {self.vendor_db_path}")
+                logger.debug(f"Expected location: {self.vendor_db_path.absolute()}")
                 return False
             
             with open(self.vendor_db_path, 'r') as f:
@@ -130,73 +130,72 @@ class VendorSyncUtility:
                 self.vendors_data = data.get('vendors', {})
             
             self.stats['total'] = len(self.vendors_data)
-            print(f"[OK] Loaded {self.stats['total']} vendors from database")
-            
+            logger.info(f"Loaded {self.stats['total']} vendors from database")
+
             if self.stats['total'] == 0:
-                print("[WARN]  No vendors found in database")
+                logger.warning("No vendors found in database")
                 return False
-            
+
             # Validate and cleanup duplicates
             dup_result = self.validate_and_cleanup_duplicates(auto_fix=True)
             if dup_result['duplicates_removed'] > 0:
-                print(f"[CLEAN] Cleaned up {dup_result['duplicates_removed']} duplicate vendor entries")
+                logger.info(f"Cleaned up {dup_result['duplicates_removed']} duplicate vendor entries")
                 self.stats['total'] = len(self.vendors_data)
                 # Save cleaned database immediately
                 self.save_vendor_database()
-                print(f"[SAVE] Saved cleaned database: {self.stats['total']} unique vendors")
+                logger.info(f"Saved cleaned database: {self.stats['total']} unique vendors")
                 
             return True
             
         except Exception as e:
-            print(f"[ERROR] Failed to load vendor database: {e}")
+            logger.error(f"Failed to load vendor database: {e}")
             return False
     
     def discover_schema(self) -> bool:
         """Discover GnuCash database schema."""
         try:
-            print("[SEARCH] Discovering GnuCash database schema...")
-            
+            logger.info("Discovering GnuCash database schema...")
+
             # Check if GnuCash database path is configured
             if not hasattr(config, 'GNUCASH_DB_PATH'):
-                print("[ERROR] GNUCASH_DB_PATH not configured in config.py")
+                logger.error("GNUCASH_DB_PATH not configured in config.py")
                 return False
-            
+
             gnucash_path = Path(config.GNUCASH_DB_PATH)
             if not gnucash_path.exists():
-                print(f"[ERROR] GnuCash database not found: {gnucash_path}")
+                logger.error(f"GnuCash database not found: {gnucash_path}")
                 return False
-            
-            print(f"[INFO] Using GnuCash database: {gnucash_path}")
-            
+
+            logger.debug(f"Using GnuCash database: {gnucash_path}")
+
             # Create fresh schema discovery instance
             SchemaDiscovery = get_schema_discovery()
             self.schema = SchemaDiscovery()
-            
+
             # Ensure schema is discovered/loaded
             if not hasattr(self.schema, 'schema') or not self.schema.schema:
-                print("[SYNC] Running schema discovery...")
+                logger.info("Running schema discovery...")
                 result = self.schema.discover()
                 if not result.passed:
-                    print(f"[ERROR] Schema discovery failed: {result.summary}")
+                    logger.error(f"Schema discovery failed: {result.summary}")
                     return False
-            
+
             # Check if vendors table exists and get structure
             if not self.schema.has_table('vendors'):
-                print("[ERROR] Vendors table not found in GnuCash database")
+                logger.error("Vendors table not found in GnuCash database")
                 return False
-                
+
             vendor_columns = self.schema.get_columns('vendors')
-            print(f"[OK] Found vendors table with {len(vendor_columns)} columns")
-            
+            logger.info(f"Found vendors table with {len(vendor_columns)} columns")
+
             # Log available address columns
             addr_columns = [col for col in vendor_columns if col.startswith('addr_')]
-            print(f"[INFO] Address columns available: {addr_columns}")
-            
+            logger.debug(f"Address columns available: {addr_columns}")
+
             return True
-            
+
         except Exception as e:
-            print(f"[ERROR] Failed to discover schema: {e}")
-            logger.error(f"Schema discovery failed: {e}")
+            logger.error(f"Failed to discover schema: {e}")
             import traceback
             logger.error(traceback.format_exc())
             return False
@@ -205,16 +204,16 @@ class VendorSyncUtility:
         """Build INSERT statement based on discovered schema."""
         try:
             sql, columns = self.schema.build_vendor_insert_statement()
-            print(f"[OK] Built INSERT statement with {len(columns)} columns")
-            
+            logger.debug(f"Built INSERT statement with {len(columns)} columns")
+
             # Show which address columns will be populated
             addr_columns = [col for col in columns if col.startswith('addr_')]
             for col in addr_columns:
-                print(f"  [INFO] Will populate address field: {col}")
-            
+                logger.debug(f"Will populate address field: {col}")
+
             return sql, columns
         except Exception as e:
-            print(f"[ERROR] Failed to build INSERT statement: {e}")
+            logger.error(f"Failed to build INSERT statement: {e}")
             raise
     
     def vendor_exists_in_gnucash(self, display_name: str) -> Optional[Dict]:
@@ -276,12 +275,8 @@ class VendorSyncUtility:
             }
             
             # Log address data being inserted
-            print(f"    [INFO] Address data:")
-            print(f"      addr_name: '{values_map.get('addr_name', '')}'")
-            print(f"      addr_addr1: '{values_map.get('addr_addr1', '')}'")
-            print(f"      addr_addr2: '{values_map.get('addr_addr2', '')}'")
-            print(f"      addr_phone: '{values_map.get('addr_phone', '')}'")
-            
+            logger.debug(f"Address data: addr_name='{values_map.get('addr_name', '')}' addr_addr1='{values_map.get('addr_addr1', '')}' addr_addr2='{values_map.get('addr_addr2', '')}' addr_phone='{values_map.get('addr_phone', '')}'")
+
             # Build ordered values list
             insert_values = [values_map.get(col, '') for col in column_names]
             
@@ -297,23 +292,19 @@ class VendorSyncUtility:
                 )
                 row = cursor.fetchone()
                 if row:
-                    print(f"    [OK] Verified address saved:")
-                    print(f"      addr_name: '{row['addr_name'] or '(empty)'}'")
-                    print(f"      addr_addr1: '{row['addr_addr1'] or '(empty)'}'")
-                    print(f"      addr_addr2: '{row['addr_addr2'] or '(empty)'}'")
-                    print(f"      addr_phone: '{row['addr_phone'] or '(empty)'}'")
+                    logger.debug(f"Verified address saved: addr_name='{row['addr_name'] or '(empty)'}' addr_addr1='{row['addr_addr1'] or '(empty)'}' addr_addr2='{row['addr_addr2'] or '(empty)'}' addr_phone='{row['addr_phone'] or '(empty)'}'")
+
             
             # Update JSON database with GnuCash IDs
             vendor_data['gnucash_guid'] = vendor_guid
             vendor_data['gnucash_id'] = vendor_id
             
-            print(f"  [OK] Created: {display_name} (ID: {vendor_id})")
+            logger.info(f"Created: {display_name} (ID: {vendor_id})")
             self.stats['created'] += 1
             return True
-            
+
         except Exception as e:
-            print(f"  [ERROR] Failed to create {display_name}: {e}")
-            logger.error(f"Failed to create vendor {display_name}: {e}")
+            logger.error(f"Failed to create {display_name}: {e}")
             import traceback
             logger.error(traceback.format_exc())
             self.stats['errors'] += 1
@@ -346,10 +337,10 @@ class VendorSyncUtility:
             
             with open(self.vendor_db_path, 'w') as f:
                 json.dump(data, f, indent=2)
-            print(f"[SAVE] Updated vendor database saved to: {self.vendor_db_path}")
+            logger.info(f"Updated vendor database saved to: {self.vendor_db_path}")
             return True
         except Exception as e:
-            print(f"[ERROR] Failed to save vendor database: {e}")
+            logger.error(f"Failed to save vendor database: {e}")
             return False
     
     def reset_vendor_to_unsynced(self, vendor_key: str) -> bool:
@@ -488,15 +479,15 @@ class VendorSyncUtility:
             return False
         
         if dry_run:
-            print(f"[SEARCH] DRY RUN - Would sync {self.stats['total']} vendors")
+            logger.info(f"DRY RUN - Would sync {self.stats['total']} vendors")
             for vendor_key, vendor_data in self.vendors_data.items():
                 display_name = vendor_data.get('display_name', vendor_key)
                 existing = self.vendor_exists_in_gnucash(display_name)
                 status = "EXISTS" if existing else "CREATE"
                 print(f"  {display_name} -> {status}")
             return True
-        
-        print(f"[START] Starting sync of {self.stats['total']} vendors...\n")
+
+        logger.info(f"Starting sync of {self.stats['total']} vendors...")
         
         for vendor_key, vendor_data in self.vendors_data.items():
             display_name = vendor_data.get('display_name', vendor_key)
@@ -506,15 +497,15 @@ class VendorSyncUtility:
             existing = self.vendor_exists_in_gnucash(display_name)
             
             if existing and not force_recreate:
-                print(f"  [INFO] Already exists (ID: {existing['id']})")
+                logger.debug(f"Already exists (ID: {existing['id']}): {display_name}")
                 # Update JSON with GnuCash IDs if missing
                 if not vendor_data.get('gnucash_guid'):
                     self.update_vendor_ids(vendor_key, existing)
-                    print(f"  [NOTE] Updated JSON with GnuCash IDs")
+                    logger.info(f"Updated JSON with GnuCash IDs for {display_name}")
                 else:
                     self.stats['skipped'] += 1
             elif existing and force_recreate:
-                print(f"  [SYNC] Force recreate not implemented (would delete existing)")
+                logger.info(f"Force recreate not implemented (would delete existing): {display_name}")
                 self.stats['skipped'] += 1
             else:
                 # Create new vendor
@@ -584,10 +575,10 @@ def sync_gnucash_to_json(self) -> bool:
     try:
         # Get all vendors from GnuCash
         gnucash_vendors = get_all_gnucash_vendors()
-        print(f"[FOUND] Found {len(gnucash_vendors)} vendors in GnuCash database")
-        
+        logger.info(f"Found {len(gnucash_vendors)} vendors in GnuCash database")
+
         if not gnucash_vendors:
-            print("[WARN]  No vendors found in GnuCash")
+            logger.warning("No vendors found in GnuCash")
             return True
         
         # Load current JSON database
@@ -644,33 +635,29 @@ def sync_gnucash_to_json(self) -> bool:
                     vendor_data['expense_account'] = old_data['expense_account']
                 if old_data.get('expense_account_guid'):
                     vendor_data['expense_account_guid'] = old_data['expense_account_guid']
-                
+
                 self.vendors_data[existing_vendor] = vendor_data
-                print(f"  [UPDATED]  Updated: {vendor_name}")
+                logger.info(f"Updated: {vendor_name}")
                 updated_count += 1
             else:
                 # Add new vendor
                 self.vendors_data[vendor_key] = vendor_data
-                print(f"  [NEW] New: {vendor_name}")
+                logger.info(f"New: {vendor_name}")
                 new_count += 1
-        
+
         self.stats['synced_from_gnucash'] = new_count + updated_count
-        
-        print(f"\n[SUMMARY] Summary:")
-        print(f"  New vendors added: {new_count}")
-        print(f"  Existing vendors updated: {updated_count}")
-        print(f"  Total: {new_count + updated_count}")
-        
+
+        logger.info(f"Summary: {new_count} new vendors added, {updated_count} existing vendors updated, {new_count + updated_count} total")
+
         # Save updated JSON database
         if new_count > 0 or updated_count > 0:
             self.save_vendor_database()
-            print(f"[OK] JSON database updated successfully")
-        
+            logger.info("JSON database updated successfully")
+
         return True
-        
+
     except Exception as e:
-        print(f"[ERROR] Error syncing GnuCash to JSON: {e}")
-        logger.error(f"Error in sync_gnucash_to_json: {e}")
+        logger.error(f"Error syncing GnuCash to JSON: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return False
@@ -690,14 +677,15 @@ def sync_bidirectional(self, dry_run: bool = False) -> bool:
         return False
     
     if dry_run:
-        print("[SEARCH] DRY RUN - No changes will be made\n")
+        logger.info("DRY RUN - No changes will be made")
+        print()
     
     # Step 1: Sync from GnuCash to JSON (get latest from database)
     print("Step 1: GnuCash -> JSON (import from database)")
     print("-" * 60)
     if not dry_run:
         if not self.sync_gnucash_to_json():
-            print("[ERROR] Failed to sync from GnuCash to JSON")
+            logger.error("Failed to sync from GnuCash to JSON")
             return False
     else:
         gnucash_vendors = get_all_gnucash_vendors()
@@ -708,7 +696,7 @@ def sync_bidirectional(self, dry_run: bool = False) -> bool:
     print("-" * 60)
     if not dry_run:
         if not self.sync_all_vendors(force_recreate=False, dry_run=False):
-            print("[ERROR] Failed to sync from JSON to GnuCash")
+            logger.error("Failed to sync from JSON to GnuCash")
             return False
     else:
         if self.load_vendor_database():
@@ -799,18 +787,17 @@ def main():
             success = sync_util.sync_bidirectional(dry_run=args.dry_run)
         
         if success:
-            print("[DONE] Vendor sync completed successfully!")
+            logger.info("Vendor sync completed successfully!")
             sys.exit(0)
         else:
-            print("[FAIL] Vendor sync completed with errors")
+            logger.error("Vendor sync completed with errors")
             sys.exit(1)
-            
+
     except KeyboardInterrupt:
-        print("\n[STOP]  Vendor sync cancelled by user")
+        logger.warning("Vendor sync cancelled by user")
         sys.exit(1)
     except Exception as e:
-        print(f"[FAIL] Fatal error during sync: {e}")
-        logger.error(f"Fatal error: {e}")
+        logger.error(f"Fatal error during sync: {e}")
         import traceback
         logger.error(traceback.format_exc())
         sys.exit(1)
@@ -852,7 +839,7 @@ def validate_and_fix_vendor_references(auto_fix: bool = True, verbose: bool = Fa
             print(f"Fixed vendors: {len(result['fixed'])}")
         
         if result['invalid']:
-            print(f"\n[WARN]  Invalid vendors found:")
+            print(f"\nInvalid vendors found:")
             for vendor_key in result['invalid']:
                 print(f"  - {vendor_key}")
             if not auto_fix:
