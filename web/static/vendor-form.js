@@ -126,13 +126,10 @@ const VendorForm = (() => {
     if (!c) return;
 
     addr1.value = c.addr_line1 || "";
-    // Parse "City, ST ZIP" from addr_line2 (US format; non-US leaves city/state/zip blank)
-    const a2 = c.addr_line2 || "";
-    const m = a2.match(/^(.*),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/);
     addr2.value = "";
-    city.value = m ? m[1] : "";
-    state.value = m ? m[2] : "";
-    zip.value = m ? m[3] : "";
+    city.value = c.city || "";
+    state.value = c.state || "";
+    zip.value = c.zip || "";
     phone.value = c.phone || "";
     debouncedLookup();
   }
