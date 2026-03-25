@@ -136,28 +136,30 @@ def fuzzy_match_vendor(
         threshold = config.FUZZY_MATCH_THRESHOLD
     
     if not known_vendors:
+        logger.debug(f"fuzzy_match_vendor: no known vendors to search against")
         return None, 0, []
-    
+
     # Build list of all names to search against
     # Include display_name, search_name, and any aliases
     name_to_key = {}
-    
+
     for key, data in known_vendors.items():
         # Add the vendor key itself
         name_to_key[key] = key
-        
+
         # Add display name
         if 'display_name' in data:
             name_to_key[data['display_name'].lower()] = key
-        
+
         # Add search name if different
         if 'search_name' in data:
             name_to_key[data['search_name'].lower()] = key
-    
+
     # Also check aliases section if it exists (handled separately in vendor_manager)
-    
+
     search_lower = search_name.lower()
-    
+    logger.debug(f"fuzzy_match_vendor: searching '{search_lower}' against {len(name_to_key)} names from {len(known_vendors)} vendors (threshold={threshold})")
+
     # Find all matches above threshold
     matches = []
     for name, key in name_to_key.items():
@@ -165,21 +167,24 @@ def fuzzy_match_vendor(
         score = fuzz.token_set_ratio(search_lower, name)
         if score >= threshold:
             matches.append((key, score))
-    
+            logger.debug(f"  match: '{name}' -> key='{key}' score={score}")
+
     # Remove duplicates (same key might match multiple names)
     seen_keys = {}
     for key, score in matches:
         if key not in seen_keys or score > seen_keys[key]:
             seen_keys[key] = score
-    
+
     matches = [(k, s) for k, s in seen_keys.items()]
     matches.sort(key=lambda x: x[1], reverse=True)
-    
+
     if not matches:
+        logger.debug(f"fuzzy_match_vendor: no matches above threshold {threshold}")
         return None, 0, []
-    
+
     best_key, best_score = matches[0]
-    
+    logger.debug(f"fuzzy_match_vendor: {len(matches)} match(es), best='{best_key}' score={best_score}")
+
     return best_key, best_score, matches
 
 

@@ -322,8 +322,10 @@ def vendor_search(request: Request, vendor_name: str = ""):
 
     try:
         vm = VendorManager()
+        vendors_dict = vm.vendors.get("vendors", {})
+        logger.debug(f"Vendor search: query='{vendor_name.strip()}', {len(vendors_dict)} vendors loaded")
         _, _, candidates = fuzzy_match_vendor(
-            vendor_name.strip(), vm.vendors.get("vendors", {})
+            vendor_name.strip(), vendors_dict, threshold=VENDOR_SEARCH_MIN_SCORE
         )
     except Exception as e:
         logger.warning(f"Vendor search failed for '{vendor_name}': {e}")
@@ -332,7 +334,7 @@ def vendor_search(request: Request, vendor_name: str = ""):
     seen = set()
     results = []
     for key, score in candidates:
-        if score >= VENDOR_SEARCH_MIN_SCORE and key not in seen:
+        if key not in seen:
             seen.add(key)
             vdata = vm.vendors["vendors"].get(key, {})
             results.append({
@@ -340,6 +342,7 @@ def vendor_search(request: Request, vendor_name: str = ""):
                 "display_name": vdata.get("display_name", key),
                 "score": score,
             })
+    logger.debug(f"Vendor search: '{vendor_name.strip()}' -> {len(results)} result(s)")
 
     return templates.TemplateResponse(request, "partials/vendor_dropdown.html", {
         "results": results[:6],
