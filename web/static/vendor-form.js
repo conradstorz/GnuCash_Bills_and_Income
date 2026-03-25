@@ -96,7 +96,7 @@ const VendorForm = (() => {
     if (!items || items.length === 0) {
       candidates.innerHTML = message
         ? `<p class="error-msg" style="margin-top:0.25rem">${escapeHtml(message)}</p>`
-        : "";
+        : '<p class="vf-status">No exact matches found</p>';
       return;
     }
 
