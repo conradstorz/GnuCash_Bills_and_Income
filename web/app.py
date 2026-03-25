@@ -41,6 +41,16 @@ async def startup_event():
     logging_setup.setup_logging(module_name="web")
     logger.info("GnuCash Bills web application starting")
     logger.info(f"Database: {settings.gnucash_db_path}")
+    # Sync GnuCash vendor data into JSON (DB is canonical)
+    try:
+        sync = VendorSyncUtility()
+        if sync.discover_schema():
+            sync.sync_gnucash_to_json()
+            logger.info("Startup vendor sync complete")
+        else:
+            logger.warning("Startup vendor sync skipped — schema discovery failed")
+    except Exception as e:
+        logger.warning(f"Startup vendor sync failed: {e}")
     logger.info(f"Server running on http://127.0.0.1:7432")
 
 VENDOR_SEARCH_MIN_SCORE = 40  # Lower threshold for dropdown suggestions
