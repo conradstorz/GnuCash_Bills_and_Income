@@ -50,7 +50,7 @@ const VendorForm = (() => {
     state.value = "";
     zip.value = "";
     phone.value = "";
-    candidates.innerHTML = "";
+    candidates.innerHTML = '<p class="vf-status">Searching\u2026</p>';
 
     // Clear the vendor dropdown behind us
     document.getElementById("vendor-dropdown").innerHTML = "";
