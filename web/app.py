@@ -396,15 +396,16 @@ def create_vendor_route(
     if not display_name:
         return JSONResponse({"ok": False, "error": "Vendor name is required."})
 
+    # Compose addr_addr2 from city/state/zip (GnuCash convention: "City, ST ZIP")
+    city_state_zip = ", ".join(filter(None, [addr_city, " ".join(filter(None, [addr_state, addr_zip]))]))
+    addr2 = addr_line2 or city_state_zip
+
     try:
         guid = gnucash_db.create_vendor(
             name=display_name,
             addr_name=display_name,
             addr_addr1=addr_line1,
-            addr_addr2=addr_line2,
-            addr_city=addr_city,
-            addr_state=addr_state,
-            addr_zip=addr_zip,
+            addr_addr2=addr2,
             addr_phone=addr_phone,
         )
         # Cache in JSON vendor database
