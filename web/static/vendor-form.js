@@ -31,7 +31,8 @@ const VendorForm = (() => {
       if (e.target === dialog) close();
     });
 
-    // Debounced address re-lookup on city/zip change
+    // Debounced address re-lookup on display name/city/zip change
+    displayName.addEventListener("input", () => debouncedLookup());
     city.addEventListener("input", () => debouncedLookup());
     zip.addEventListener("input", () => debouncedLookup());
   }
