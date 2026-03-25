@@ -278,12 +278,12 @@ class TestProcessOneBill:
         return {
             "gnucash_guid": self.VENDOR_GUID,
             "display_name": "Acme Electric",
-            "expense_account_guid": self.EXPENSE_GUID,
         }
 
     def _patch_gnucash(self, monkeypatch, web_app):
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
+        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
         monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
                             lambda guid: {"name": "Test Account", "guid": guid})
         monkeypatch.setattr(web_app.gnucash_db, "create_bill",
@@ -317,12 +317,12 @@ class TestProcessOneBill:
 
     def test_no_expense_account_returns_error(self, monkeypatch):
         from bill_processor.web import app as web_app
-        vendor_no_expense = {"gnucash_guid": self.VENDOR_GUID, "display_name": "Acme Electric"}
         mock_vm = MagicMock()
-        mock_vm.find_vendor.return_value = (vendor_no_expense, "exact")
+        mock_vm.find_vendor.return_value = (self._good_vendor(), "exact")
         monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
+        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", None)
         monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
                             lambda guid: {"name": "Test Account", "guid": guid})
 
@@ -337,6 +337,7 @@ class TestProcessOneBill:
         monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
+        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
         monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
                             lambda guid: {"name": "Test Account", "guid": guid})
 
@@ -356,6 +357,7 @@ class TestProcessOneBill:
         monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
+        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
         monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
                             lambda guid: {"name": "Test Account", "guid": guid})
         monkeypatch.setattr(web_app.gnucash_db, "create_bill", lambda **kw: self.BILL_GUID)
@@ -382,6 +384,7 @@ class TestProcessOneBill:
                             lambda guid: {"name": "Accounts Payable", "guid": guid})
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", AP_GUID)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
+        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
 
         captured = {}
         def capture_post(**kw):
@@ -402,6 +405,7 @@ class TestProcessOneBill:
                             lambda guid: {"name": "Checking", "guid": guid})
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
+        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
 
         captured = {}
         def capture_pay(**kw):
@@ -582,6 +586,7 @@ class TestDashboardButtonGating:
         from bill_processor.web import app as web_app
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", "c" * 32)
+        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", "x" * 32)
         tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
 
         response = client.get("/partials/queued-bills")

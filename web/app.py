@@ -82,6 +82,24 @@ def _get_sync_status() -> dict:
         return {"json_count": 0, "gc_count": 0, "needs_sync": False, "error": str(e)}
 
 
+def _account_name(guid):
+    """Resolve an account GUID to its display name, or None."""
+    if not guid:
+        return None
+    acct = gnucash_db.get_account_by_guid(guid)
+    return acct["name"] if acct else None
+
+
+def _processing_accounts_context() -> dict:
+    """Common template context for queued_bills partial (account names + configured flag)."""
+    return {
+        "processing_accounts_configured": settings.processing_accounts_configured,
+        "ap_account_name": _account_name(settings.ap_account_guid),
+        "checking_account_name": _account_name(settings.checking_account_guid),
+        "expense_account_name": _account_name(settings.expense_account_guid),
+    }
+
+
 @app.get("/status")
 def get_status():
     """Return current system state as JSON (used by HTMX polling)."""
@@ -121,7 +139,7 @@ def dashboard(request: Request):
         "error": None,
         "cash_accounts": _get_enabled_cash_accounts(),
         "bank_accounts": gnucash_db.get_checking_accounts(),
-        "processing_accounts_configured": settings.processing_accounts_configured,
+        **_processing_accounts_context(),
     })
 
 
@@ -158,7 +176,7 @@ def remove_from_queue(request: Request, index: int):
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": queue,
         "last_error": None if ok else f"Could not remove bill at index {index}",
-        "processing_accounts_configured": settings.processing_accounts_configured,
+        **_processing_accounts_context(),
     })
 
 
@@ -194,11 +212,11 @@ def _process_one_bill(bill: dict) -> dict:
     if vendor is None:
         return {"ok": False, "error": f"Vendor not found: {bill['vendor_name']}"}
 
-    expense_account_guid = vendor.get("expense_account_guid")
+    expense_account_guid = settings.expense_account_guid
     if not expense_account_guid:
         return {
             "ok": False,
-            "error": f"Vendor '{vendor['display_name']}' has no expense account configured",
+            "error": "No expense account configured — set one in Processing Accounts settings",
         }
 
     try:
@@ -241,7 +259,7 @@ def process_all(request: Request):
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": remaining,
         "last_error": "; ".join(errors) if errors else None,
-        "processing_accounts_configured": settings.processing_accounts_configured,
+        **_processing_accounts_context(),
     })
 
 
@@ -255,7 +273,7 @@ def process_one(request: Request, index: int):
         return templates.TemplateResponse(request, "partials/queued_bills.html", {
             "queue": queue,
             "last_error": f"Bill at index {index} not found in queue",
-            "processing_accounts_configured": settings.processing_accounts_configured,
+            **_processing_accounts_context(),
         })
     result = _process_one_bill(bill)
     if result["ok"]:
@@ -264,7 +282,7 @@ def process_one(request: Request, index: int):
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": remaining,
         "last_error": None if result["ok"] else result["error"],
-        "processing_accounts_configured": settings.processing_accounts_configured,
+        **_processing_accounts_context(),
     })
 
 
@@ -292,7 +310,7 @@ def edit_queue_item(
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": queue,
         "last_error": None if ok else f"Could not update bill at index {index}",
-        "processing_accounts_configured": settings.processing_accounts_configured,
+        **_processing_accounts_context(),
     })
 
 
@@ -444,7 +462,7 @@ def get_queued_bills_partial(request: Request):
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": queue,
         "last_error": None,  # Polling auto-clears stale action errors — intentional
-        "processing_accounts_configured": settings.processing_accounts_configured,
+        **_processing_accounts_context(),
     })
 
 
@@ -932,8 +950,10 @@ async def get_processing_accounts_settings(request: Request):
     return templates.TemplateResponse(request, "settings_processing_accounts.html", {
         "payable_accounts": gnucash_db.get_payable_accounts(),
         "checking_accounts": gnucash_db.get_checking_accounts(),
+        "expense_accounts": gnucash_db.get_expense_accounts(),
         "current_ap_guid": settings.ap_account_guid,
         "current_checking_guid": settings.checking_account_guid,
+        "current_expense_guid": settings.expense_account_guid,
     })
 
 
@@ -976,6 +996,27 @@ async def save_checking_account(request: Request, checking_account_guid: str = F
         "current_checking_guid": checking_account_guid,
         "error_checking": None,
         "saved_checking": True,
+    })
+
+
+@app.post("/settings/processing-accounts/expense-account", response_class=HTMLResponse)
+async def save_expense_account(request: Request, expense_account_guid: str = Form(...)):
+    """HTMX — save selected expense account GUID and return updated section."""
+    expense_accounts = gnucash_db.get_expense_accounts()
+    valid_guids = {a["guid"] for a in expense_accounts}
+    if expense_account_guid not in valid_guids:
+        return templates.TemplateResponse(request, "partials/processing_expense_section.html", {
+            "expense_accounts": expense_accounts,
+            "current_expense_guid": settings.expense_account_guid,
+            "error_expense": "Invalid account — please select from the list.",
+            "saved_expense": False,
+        })
+    settings.expense_account_guid = expense_account_guid
+    return templates.TemplateResponse(request, "partials/processing_expense_section.html", {
+        "expense_accounts": expense_accounts,
+        "current_expense_guid": expense_account_guid,
+        "error_expense": None,
+        "saved_expense": True,
     })
 
 

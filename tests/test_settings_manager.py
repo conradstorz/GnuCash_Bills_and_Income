@@ -271,12 +271,13 @@ class TestProcessingAccountSettings:
         sm.checking_account_guid = "c" * 32
         assert sm.processing_accounts_configured is False
 
-    def test_processing_accounts_configured_true_when_both_set(self, tmp_path):
+    def test_processing_accounts_configured_true_when_all_set(self, tmp_path):
         from bill_processor import settings_manager
         tmp_settings = tmp_path / "user_settings.json"
         sm = settings_manager.SettingsManager(settings_file=tmp_settings)
         sm.ap_account_guid = "a" * 32
         sm.checking_account_guid = "c" * 32
+        sm.expense_account_guid = "e" * 32
         assert sm.processing_accounts_configured is True
 
     def test_ap_account_guid_persists_to_file(self, tmp_path):

@@ -66,6 +66,7 @@ class SettingsManager:
             "cash_on_hand_account_name": config.CASH_ON_HAND_ACCOUNT_NAME,
             "ap_account_guid": None,
             "checking_account_guid": None,
+            "expense_account_guid": None,
             
             # Default Values
             "default_memo": config.DEFAULT_MEMO,
@@ -227,8 +228,17 @@ class SettingsManager:
         self.save()
 
     @property
+    def expense_account_guid(self) -> Optional[str]:
+        return self._settings.get("expense_account_guid")
+
+    @expense_account_guid.setter
+    def expense_account_guid(self, value: Optional[str]) -> None:
+        self._settings["expense_account_guid"] = value
+        self.save()
+
+    @property
     def processing_accounts_configured(self) -> bool:
-        return bool(self.ap_account_guid and self.checking_account_guid)
+        return bool(self.ap_account_guid and self.checking_account_guid and self.expense_account_guid)
 
     def to_dict(self) -> dict:
         """Export all settings as dictionary."""
