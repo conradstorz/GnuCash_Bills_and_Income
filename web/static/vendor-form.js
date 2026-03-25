@@ -134,7 +134,7 @@ const VendorForm = (() => {
     state.value = m ? m[2] : "";
     zip.value = m ? m[3] : "";
     phone.value = c.phone || "";
-    candidates.innerHTML = "";
+    debouncedLookup();
   }
 
   async function create() {
