@@ -57,12 +57,15 @@ class VendorManager:
         """Save the vendor JSON database."""
         if data is None:
             data = self.vendors
-        
+
         # Ensure directory exists
         self.json_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(self.json_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
+
+        try:
+            with open(self.json_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+        except (IOError, OSError) as e:
+            logger.error(f"Failed to save vendor database to {self.json_path}: {e}")
     
     def save(self):
         """Save current state to JSON."""
