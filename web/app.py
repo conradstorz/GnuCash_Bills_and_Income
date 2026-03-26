@@ -170,6 +170,7 @@ def add_to_queue(
     try:
         parsed_date = date.fromisoformat(bill_date) if bill_date else date.today()
     except ValueError:
+        logger.warning(f"Invalid bill date '{bill_date}' for {vendor_name}, defaulting to today")
         parsed_date = date.today()
     queue_io.add_bill(vendor_name, amount, memo, parsed_date, check_number)
     return templates.TemplateResponse(request, "bill_entry.html", {
@@ -314,6 +315,7 @@ def edit_queue_item(
     try:
         parsed_date = date.fromisoformat(bill_date) if bill_date else date.today()
     except ValueError:
+        logger.warning(f"Invalid bill date '{bill_date}' for queue edit index {index}, defaulting to today")
         parsed_date = date.today()
     ok = queue_io.update_bill(index, vendor_name, amount, memo, parsed_date, check_number)
     queue = queue_io.read_queue()
@@ -593,7 +595,7 @@ async def cash_submit(request: Request):
                     "amount": float(amount_str),
                 })
             except ValueError:
-                pass
+                logger.warning(f"Cash entry: skipping row with invalid amount '{amount_str}' for memo '{memo_val}'")
 
     def _render_panel(error=None, success=None):
         today = date_type.today()
@@ -617,6 +619,7 @@ async def cash_submit(request: Request):
     try:
         entry_date = date_type.fromisoformat(entry_date_str)
     except ValueError:
+        logger.warning(f"Invalid cash entry date '{entry_date_str}', defaulting to today")
         entry_date = date_type.today()
 
     # Create batch transaction
@@ -645,6 +648,7 @@ async def cash_submit(request: Request):
             try:
                 deposit_date = date_type.fromisoformat(deposit_date_str)
             except ValueError:
+                logger.warning(f"Invalid deposit date '{deposit_date_str}', defaulting to tomorrow")
                 deposit_date = date_type.today() + timedelta(days=1)
             gnucash_db.create_cash_deposit(
                 deposit_date=deposit_date,
@@ -689,7 +693,8 @@ async def db_browse():
             timeout=120,
         )
         path = result.stdout.strip()
-    except Exception:
+    except Exception as e:
+        logger.error(f"File picker failed: {e}")
         path = ""
     return {"path": path}
 
@@ -697,7 +702,6 @@ async def db_browse():
 @app.post("/db/set-path")
 async def db_set_path(request: Request):
     """Write a new GNUCASH_DB_PATH to config.py and reload config."""
-    import re
     import importlib
     from fastapi.responses import RedirectResponse
     from bill_processor import config as cfg
@@ -722,16 +726,19 @@ async def db_set_path(request: Request):
         return _error(f"File not found: {new_path}")
 
     # Update config.py in place
-    config_text = CONFIG_FILE_PATH.read_text(encoding="utf-8")
-    new_text, count = re.subn(
-        r'(GNUCASH_DB_PATH\s*=\s*Path\(r?)["\'].*?["\'](\))',
-        lambda m: f'{m.group(1)}r"{new_path}"{m.group(2)}',
-        config_text,
-    )
-    if count == 0:
+    lines = CONFIG_FILE_PATH.read_text(encoding="utf-8").splitlines(keepends=True)
+    replaced = False
+    for i, line in enumerate(lines):
+        stripped = line.lstrip()
+        if stripped.startswith("GNUCASH_DB_PATH") and "= Path(" in stripped:
+            indent = line[:len(line) - len(stripped)]
+            lines[i] = f'{indent}GNUCASH_DB_PATH = Path(r"{new_path}")\n'
+            replaced = True
+            break
+    if not replaced:
         return _error("Could not update config.py — GNUCASH_DB_PATH line not found.")
 
-    CONFIG_FILE_PATH.write_text(new_text, encoding="utf-8")
+    CONFIG_FILE_PATH.write_text(''.join(lines), encoding="utf-8")
 
     # Reload config so the running server picks up the change immediately
     importlib.reload(cfg)
