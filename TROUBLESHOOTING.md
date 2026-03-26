@@ -13,10 +13,13 @@ lock on it.
 **Refresh** on the dashboard. The tool cannot read or write the database
 while GnuCash has it open.
 
-If GnuCash crashed and left a stale lock, look for a `.gnucash.LCK` file
-next to your database and delete it. The lock file contains the hostname
-and process ID of whatever locked it -- the dashboard shows this
-information on the error page.
+GnuCash records locks in a `gnclock` table inside the SQLite database
+itself (not an external lock file). If GnuCash or the bill processor
+crashes and leaves a stale lock behind, the tool detects and cleans it
+automatically -- whenever it acquires the database lock, it first checks
+whether the recorded PID is still running and removes the entry if the
+process has terminated. No manual intervention is needed for stale locks
+on the same machine.
 
 ### "Database not found" or wrong database
 
