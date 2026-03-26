@@ -716,8 +716,6 @@ def get_next_vendor_id() -> str:
     Get the next available vendor ID.
     Extracts numeric portion from all existing IDs and finds the true maximum.
     """
-    import re
-    
     with get_connection() as conn:
         cursor = conn.execute("SELECT id FROM vendors")
         rows = cursor.fetchall()
@@ -727,10 +725,9 @@ def get_next_vendor_id() -> str:
             max_num = 0
             for row in rows:
                 if row['id']:
-                    match = re.search(r'(\d+)', row['id'])
-                    if match:
-                        num = int(match.group(1))
-                        max_num = max(max_num, num)
+                    digits = ''.join(c for c in row['id'] if c.isdigit())
+                    if digits:
+                        max_num = max(max_num, int(digits))
             
             # Return next ID
             return config.VENDOR_ID_FORMAT.format(prefix=config.VENDOR_ID_PREFIX, num=max_num + 1)
@@ -1630,11 +1627,9 @@ def get_next_bill_id() -> str:
         row = cursor.fetchone()
         
         if row and row['id']:
-            import re
-            match = re.search(r'(\d+)', row['id'])
-            if match:
-                num = int(match.group(1))
-                return config.BILL_ID_FORMAT.format(prefix=config.BILL_ID_PREFIX, num=num + 1)
+            digits = ''.join(c for c in row['id'] if c.isdigit())
+            if digits:
+                return config.BILL_ID_FORMAT.format(prefix=config.BILL_ID_PREFIX, num=int(digits) + 1)
         
         return config.BILL_ID_FORMAT.format(prefix=config.BILL_ID_PREFIX, num=1)
 

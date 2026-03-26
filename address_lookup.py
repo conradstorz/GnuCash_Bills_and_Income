@@ -17,6 +17,58 @@ class AddressLookupError(Exception):
     pass
 
 
+def _extract_zip(text: str) -> str | None:
+    """Find a US ZIP code (5 digits or 5+4) in text. Returns the match or None."""
+    for word in text.split():
+        clean = word.strip('.,;:')
+        # 5 digits optionally followed by -4 digits
+        if len(clean) == 5 and clean.isdigit():
+            return clean
+        if len(clean) == 10 and clean[5] == '-' and clean[:5].isdigit() and clean[6:].isdigit():
+            return clean
+    return None
+
+
+def _has_digits(text: str) -> bool:
+    """Return True if text contains any digit."""
+    return any(c.isdigit() for c in text)
+
+
+def _is_zip(word: str) -> bool:
+    """Return True if word looks like a 5-digit ZIP code."""
+    return len(word) == 5 and word.isdigit()
+
+
+def _looks_like_phone(text: str) -> bool:
+    """Return True if text looks like a US phone number."""
+    digits = ''.join(c for c in text if c.isdigit())
+    if len(digits) == 10:
+        return True
+    if len(digits) == 11 and digits[0] == '1':
+        return True
+    return False
+
+
+def _extract_words(text: str, min_length: int = 2) -> list[str]:
+    """Extract alphanumeric words of at least min_length characters."""
+    words = []
+    current = []
+    for c in text:
+        if c.isalnum() or c == '_':
+            current.append(c)
+        else:
+            if current:
+                word = ''.join(current)
+                if len(word) >= min_length:
+                    words.append(word)
+                current = []
+    if current:
+        word = ''.join(current)
+        if len(word) >= min_length:
+            words.append(word)
+    return words
+
+
 def _generate_fuzzy_search_terms(business_name: str) -> List[str]:
     """
     Generate fuzzy search variations from a business name.
@@ -28,21 +80,34 @@ def _generate_fuzzy_search_terms(business_name: str) -> List[str]:
     Returns:
         List of search term variations, ordered from most to least specific
     """
-    import re
-    
     variations = []
-    
-    # Remove common business suffixes
-    suffixes = [
-        r'\s+Inc\.?$', r'\s+LLC\.?$', r'\s+Ltd\.?$', r'\s+Corp\.?$',
-        r'\s+Corporation$', r'\s+Company$', r'\s+Co\.?$',
-        r'\s+Store\s*#?\d*$', r'\s+#\d+$', r'\s+\d+$',
-        r'\s+Supercenter$', r'\s+Center$', r'\s+Market$'
+
+    # Remove common business suffixes (case-insensitive)
+    suffix_words = [
+        'inc.', 'inc', 'llc.', 'llc', 'ltd.', 'ltd', 'corp.', 'corp',
+        'corporation', 'company', 'co.', 'co', 'supercenter', 'center', 'market',
     ]
-    
+
     cleaned = business_name
-    for suffix in suffixes:
-        cleaned = re.sub(suffix, '', cleaned, flags=re.IGNORECASE)
+    lower = cleaned.lower().rstrip()
+    for suffix in suffix_words:
+        if lower.endswith(suffix) and len(lower) > len(suffix):
+            # Only strip if there's whitespace before the suffix
+            prefix = cleaned[:len(cleaned) - len(suffix)].rstrip()
+            if prefix and prefix[-1:] != cleaned[len(cleaned) - len(suffix) - 1:len(cleaned) - len(suffix)]:
+                cleaned = prefix
+                lower = cleaned.lower().rstrip()
+
+    # Remove trailing store numbers like "Store #123", "#45", or bare numbers
+    words = cleaned.split()
+    while words:
+        last = words[-1]
+        last_lower = last.lower().rstrip('.')
+        if last_lower == 'store' or last.lstrip('#').isdigit():
+            words.pop()
+        else:
+            break
+    cleaned = ' '.join(words) if words else business_name
     
     if cleaned != business_name:
         variations.append(cleaned.strip())
@@ -71,10 +136,8 @@ def _filter_results_by_name_match(results: list, original_search: str, min_word_
     Returns:
         Filtered list of results
     """
-    import re
-    
-    # Extract meaningful words from original search (2+ chars, not common words)
-    search_words = [w.lower() for w in re.findall(r'\b\w{2,}\b', original_search)]
+    # Extract meaningful words from original search (2+ chars)
+    search_words = [w.lower() for w in _extract_words(original_search, min_length=2)]
     
     if len(search_words) <= 1:
         # If only one search word, return all results
@@ -606,9 +669,8 @@ def parse_address_smart(address: str) -> Dict[str, str]:
     Returns:
         Dict with 'street', 'city', 'state', 'zip', 'phone', 'name', 'line1', 'line2' keys
     """
-    import re
     from typing import List, Tuple
-    
+
     log_function_entry("parse_address_smart", address=address[:100] if address else None)
     
     result = {
@@ -680,24 +742,14 @@ def parse_address_smart(address: str) -> Dict[str, str]:
         }
         
         # Check for ZIP code (5 digits or 5+4)
-        if re.search(r'\b\d{5}(-\d{4})?\b', segment):
+        zip_val = _extract_zip(segment)
+        if zip_val:
             score['is_zip'] = 100
-            # Extract the ZIP
-            zip_match = re.search(r'\b(\d{5}(-\d{4})?)\b', segment)
-            if zip_match:
-                score['zip_value'] = zip_match.group(1)
-        
+            score['zip_value'] = zip_val
+
         # Check for phone number
-        phone_patterns = [
-            r'\(\d{3}\)\s*\d{3}-\d{4}',  # (123) 456-7890
-            r'\d{3}-\d{3}-\d{4}',         # 123-456-7890
-            r'\d{3}\.\d{3}\.\d{4}',       # 123.456.7890
-            r'\d{10}'                      # 1234567890
-        ]
-        for pattern in phone_patterns:
-            if re.search(pattern, segment):
-                score['is_phone'] = 100
-                break
+        if _looks_like_phone(segment):
+            score['is_phone'] = 100
         
         # Check for state (abbreviation or full name)
         segment_upper = segment.upper()
@@ -723,7 +775,7 @@ def parse_address_smart(address: str) -> Dict[str, str]:
                     break
         
         # Check for street address (contains number + street suffix)
-        has_number = any(re.search(r'\d+', token) for token in tokens)
+        has_number = any(_has_digits(token) for token in tokens)
         has_street_suffix = any(token.upper() in street_suffixes for token in tokens)
         
         if has_number:
@@ -877,8 +929,6 @@ def parse_address(address: str) -> Dict[str, str]:
     Returns:
         Dict with 'street', 'city', 'state', 'zip', 'line1', 'line2' keys
     """
-    import re
-    
     log_function_entry("parse_address", address=address[:100] if address else None)
     
     result = {'street': '', 'city': '', 'state': '', 'zip': '', 'line1': '', 'line2': ''}
@@ -905,9 +955,9 @@ def parse_address(address: str) -> Dict[str, str]:
     # Extract ZIP code from the last parts (more likely to be actual ZIP)
     # Search backwards to avoid street numbers
     for part in reversed(parts):
-        zip_match = re.search(r'\b(\d{5}(?:-\d{4})?)\b', part)
-        if zip_match:
-            result['zip'] = zip_match.group(1)
+        zip_val = _extract_zip(part)
+        if zip_val:
+            result['zip'] = zip_val
             logger.debug(f"Found ZIP: {result['zip']}")
             break
     
@@ -940,7 +990,7 @@ def parse_address(address: str) -> Dict[str, str]:
     # Find the street address (part containing numbers)
     street_idx = None
     for idx, part in enumerate(parts):
-        if re.search(r'\d+', part):  # Contains a number
+        if _has_digits(part):  # Contains a number
             street_idx = idx
             result['street'] = part
             logger.debug(f"Found street at index {idx}: {part}")
@@ -997,7 +1047,7 @@ def parse_address(address: str) -> Dict[str, str]:
             city_state_part = parts[state_idx]
             city_words = []
             for word in city_state_part.split():
-                if word.upper() not in states and not re.match(r'\d{5}', word):
+                if word.upper() not in states and not _is_zip(word):
                     city_words.append(word)
             if city_words:
                 result['city'] = ' '.join(city_words)
@@ -1012,7 +1062,7 @@ def parse_address(address: str) -> Dict[str, str]:
         # Remove any state abbreviations from it
         city_words = []
         for word in candidate_city.split():
-            if word.upper() not in states and not re.match(r'\d{5}', word):
+            if word.upper() not in states and not _is_zip(word):
                 city_words.append(word)
         if city_words:
             result['city'] = ' '.join(city_words)

@@ -3,7 +3,6 @@ Utility functions for bill processor.
 Name stripping, fuzzy matching, date parsing, etc.
 """
 
-import re
 from datetime import datetime, date
 from typing import Optional, Tuple, List
 from thefuzz import fuzz, process
@@ -34,13 +33,14 @@ def strip_vendor_name(name: str) -> str:
     stripped = stripped.replace("'", "")
     
     # Replace any non-alphanumeric with underscore
-    stripped = re.sub(r'[^a-z0-9]+', '_', stripped)
-    
+    stripped = ''.join(c if c.isalnum() else '_' for c in stripped)
+
     # Remove leading/trailing underscores
     stripped = stripped.strip('_')
-    
+
     # Collapse multiple underscores
-    stripped = re.sub(r'_+', '_', stripped)
+    while '__' in stripped:
+        stripped = stripped.replace('__', '_')
     
     return stripped
 

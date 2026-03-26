@@ -10,7 +10,6 @@ Run with:
     uv run python install.py
 """
 import os
-import re
 import shutil
 import sys
 import subprocess
@@ -21,6 +20,21 @@ from loguru import logger
 from bill_processor import logging_setup
 
 
+def _replace_config_path(lines: list[str], var_name: str, new_path) -> bool:
+    """Replace a Path(...) assignment in config.py lines. Returns True if replaced."""
+    prefix = f"{var_name} = Path("
+    prefix_nospace = f"{var_name}= Path("
+    for i, line in enumerate(lines):
+        stripped = line.lstrip()
+        if stripped.startswith(prefix) or stripped.startswith(prefix_nospace) or (
+            stripped.startswith(var_name) and "= Path(" in stripped
+        ):
+            indent = line[:len(line) - len(stripped)]
+            lines[i] = f'{indent}{var_name} = Path(r"{new_path}")\n'
+            return True
+    return False
+
+
 def update_config(config_path: Path, project_root: Path, db_path: Path) -> None:
     """Update PROJECT_ROOT and GNUCASH_DB_PATH in config.py.
 
@@ -29,28 +43,18 @@ def update_config(config_path: Path, project_root: Path, db_path: Path) -> None:
     logger.debug(f"Updating config file: {config_path}")
     logger.debug(f"  PROJECT_ROOT={project_root}")
     logger.debug(f"  GNUCASH_DB_PATH={db_path}")
-    
-    text = config_path.read_text(encoding="utf-8")
 
-    new_text, count1 = re.subn(
-        r'(PROJECT_ROOT\s*=\s*Path\()r?["\'].*?["\'](\))',
-        lambda m: f'{m.group(1)}r"{project_root}"{m.group(2)}',
-        text,
-    )
-    if count1 == 0:
+    lines = config_path.read_text(encoding="utf-8").splitlines(keepends=True)
+
+    if not _replace_config_path(lines, "PROJECT_ROOT", project_root):
         logger.error("PROJECT_ROOT pattern not found in config.py")
         raise ValueError("Could not find PROJECT_ROOT in config.py")
 
-    new_text, count2 = re.subn(
-        r'(GNUCASH_DB_PATH\s*=\s*Path\()r?["\'].*?["\'](\))',
-        lambda m: f'{m.group(1)}r"{db_path}"{m.group(2)}',
-        new_text,
-    )
-    if count2 == 0:
+    if not _replace_config_path(lines, "GNUCASH_DB_PATH", db_path):
         logger.error("GNUCASH_DB_PATH pattern not found in config.py")
         raise ValueError("Could not find GNUCASH_DB_PATH in config.py")
 
-    config_path.write_text(new_text, encoding="utf-8")
+    config_path.write_text(''.join(lines), encoding="utf-8")
     logger.debug("Config file updated successfully")
 
 
