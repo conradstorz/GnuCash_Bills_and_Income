@@ -495,6 +495,36 @@ class TestProcessQueueRoutes:
         assert "Acme Electric" not in remaining
         assert "Unknown Vendor" in remaining
 
+    def test_process_all_partial_failure_reports_vendor_error(self, client, tmp_queue, monkeypatch):
+        """Failed vendors should be listed in the response error summary."""
+        from bill_processor.web import app as web_app
+        tmp_queue.write_text(
+            "Acme Electric, 123.45, test, 2026-03-01\n"
+            "Unknown Vendor, 50.00, misc, 2026-03-02\n"
+        )
+
+        def selective_process(bill):
+            if bill["vendor_name"] == "Acme Electric":
+                return {"ok": True}
+            return {"ok": False, "error": "Vendor not found"}
+
+        monkeypatch.setattr(web_app, "_process_one_bill", selective_process)
+
+        response = client.post("/bills/queue/process")
+        assert response.status_code == 200
+        assert b"Unknown Vendor: Vendor not found" in response.content
+
+    def test_process_single_failure_returns_specific_error(self, client, tmp_queue, monkeypatch):
+        """Single-item process failures should show the underlying error in returned HTML."""
+        from bill_processor.web import app as web_app
+        tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
+        monkeypatch.setattr(web_app, "_process_one_bill", lambda bill: {"ok": False, "error": "DB locked"})
+
+        response = client.post("/bills/queue/0/process")
+        assert response.status_code == 200
+        assert b"DB locked" in response.content
+        assert "Acme Electric" in tmp_queue.read_text()
+
 
 @pytest.fixture
 def isolated_settings(monkeypatch):
