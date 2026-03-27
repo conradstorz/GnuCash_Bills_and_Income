@@ -1,8 +1,9 @@
 @echo off
+setlocal enabledelayedexpansion
 title GnuCash Bills - Starting...
 echo Checking if GnuCash Bills server is already running on port 7432...
 curl -s -o nul -w "" http://localhost:7432/status >nul 2>&1
-if %errorlevel% equ 0 (
+if !errorlevel! equ 0 (
     echo Server is already running. Opening browser...
     start http://localhost:7432
     echo Done.
@@ -13,14 +14,17 @@ if %errorlevel% equ 0 (
 echo Starting GnuCash Bills server on port 7432...
 start "GnuCash Bills Server" cmd /c "cd /d D:\Users\Conrad\Documents\programming\GnuCash_bills_and_collections && uv run uvicorn bill_processor.web.app:app --port 7432 & echo. & echo Server stopped. Closing window in 3 seconds... & timeout /t 3 /nobreak >nul"
 echo Waiting for server to start...
-set /a attempts=0
+set /a max_wait_seconds=30
+set /a elapsed=0
 :wait_loop
-timeout /t 2 /nobreak >nul
-set /a attempts+=1
 curl -s -o nul -w "" http://localhost:7432/status >nul 2>&1
-if %errorlevel% equ 0 goto server_ready
-if %attempts% lss 15 goto wait_loop
+if !errorlevel! equ 0 goto server_ready
+if !elapsed! geq !max_wait_seconds! goto server_failed
+powershell -NoProfile -Command "Start-Sleep -Seconds 1" >nul 2>&1
+set /a elapsed+=1
+goto wait_loop
 
+:server_failed
 echo ERROR: Server failed to start on port 7432 after 30 seconds.
 echo Check the server console window for errors.
 pause
