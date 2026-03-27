@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading
 import time
+from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from pathlib import Path
 from fastapi import FastAPI, Request, Form
@@ -32,12 +33,10 @@ BASE_DIR = Path(__file__).parent
 CONFIG_FILE_PATH = Path(__file__).parent.parent / "config.py"
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-app = FastAPI(title="GnuCash Bill Processor")
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
-# Initialize logging on application startup
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize app-level services during startup."""
     logging_setup.setup_logging(module_name="web")
     logger.info("GnuCash Bills web application starting")
     logger.info(f"Database: {settings.gnucash_db_path}")
@@ -51,7 +50,12 @@ async def startup_event():
             logger.warning("Startup vendor sync skipped — schema discovery failed")
     except Exception as e:
         logger.warning(f"Startup vendor sync failed: {e}")
-    logger.info(f"Server running on http://127.0.0.1:7432")
+    logger.info("Server running on http://127.0.0.1:7432")
+    yield
+
+
+app = FastAPI(title="GnuCash Bill Processor", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 VENDOR_SEARCH_MIN_SCORE = 40  # Lower threshold for dropdown suggestions
 
