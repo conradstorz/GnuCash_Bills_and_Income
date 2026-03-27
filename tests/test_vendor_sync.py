@@ -551,6 +551,21 @@ class TestSyncGnucashToJson:
         saved = json.loads(sync_util_with_schema.vendor_db_path.read_text())
         assert len(saved["vendors"]) >= 1
 
+    def test_sync_gnucash_to_json_is_idempotent_for_existing_guid(self, sync_util_with_schema, db_connection):
+        guid = _insert_test_vendor(db_connection, "IdempotentSyncVendor2026")
+
+        first = sync_util_with_schema.sync_gnucash_to_json()
+        assert first is True
+        second = sync_util_with_schema.sync_gnucash_to_json()
+        assert second is True
+
+        saved = json.loads(sync_util_with_schema.vendor_db_path.read_text())
+        matching = [
+            v for v in saved["vendors"].values()
+            if v.get("gnucash_guid") == guid
+        ]
+        assert len(matching) == 1
+
 
 class TestSyncBidirectional:
 

@@ -123,6 +123,38 @@ class TestCreateCashEntry:
                 description="Empty",
             )
 
+    def test_raises_when_database_locked(self, monkeypatch):
+        monkeypatch.setattr(gnucash_db, "is_locked_by_others", lambda: (True, "HOST1", 4242))
+        with pytest.raises(RuntimeError, match="locked"):
+            gnucash_db.create_cash_entry(
+                entry_date=date.today(),
+                line_items=[{"account_guid": "x" * 32, "memo": "A", "amount": 10.0}],
+                description="Locked DB",
+            )
+
+    def test_supports_negative_line_item_amounts(self, db_connection, test_accounts):
+        line_items = [
+            {"account_guid": test_accounts["expense_account"], "memo": "Cash in", "amount": 50.00},
+            {"account_guid": test_accounts["ap_account"], "memo": "Cash out", "amount": -20.00},
+        ]
+        txn_guid = gnucash_db.create_cash_entry(
+            entry_date=date.today(),
+            line_items=line_items,
+            description="Mixed sign cash entry",
+        )
+
+        with gnucash_db.get_connection(readonly=True) as conn:
+            rows = conn.execute(
+                "SELECT value_num FROM splits WHERE tx_guid = ?",
+                (txn_guid,),
+            ).fetchall()
+
+        values = [r[0] if isinstance(r, tuple) else r["value_num"] for r in rows]
+        assert len(values) == 3
+        assert sum(values) == 0
+        assert 2000 in values
+        assert -5000 in values
+
 
 class TestCreateCashDeposit:
     def test_creates_transaction(self, db_connection, test_accounts):
