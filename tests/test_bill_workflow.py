@@ -367,6 +367,160 @@ class TestBillWorkflow:
                 memo=bill_data['memo']
             )
 
+    def test_pay_bill_unposted_bill_raises_value_error(self, test_vendor_guid, test_accounts, bill_data):
+        """pay_bill() should reject bills that have not been posted."""
+        bill_guid = gnucash_db.create_bill(
+            vendor_guid=test_vendor_guid,
+            expense_account_guid=test_accounts['expense_account'],
+            amount=bill_data['amount'],
+            memo=bill_data['memo'],
+            bill_date=bill_data['date'],
+        )
+
+        with pytest.raises(ValueError, match="not posted"):
+            gnucash_db.pay_bill(
+                bill_guid=bill_guid,
+                payment_date=bill_data['date'],
+                checking_account_guid=test_accounts['checking_account'],
+            )
+
+    def test_pay_bill_already_paid_raises_value_error(self, test_vendor_guid, test_accounts, bill_data):
+        """pay_bill() should reject paying the same bill twice."""
+        bill_guid = gnucash_db.create_bill(
+            vendor_guid=test_vendor_guid,
+            expense_account_guid=test_accounts['expense_account'],
+            amount=bill_data['amount'],
+            memo=bill_data['memo'],
+            bill_date=bill_data['date'],
+        )
+        gnucash_db.post_bill(
+            bill_guid=bill_guid,
+            post_date=bill_data['date'],
+            ap_account_guid=test_accounts['ap_account'],
+        )
+        gnucash_db.pay_bill(
+            bill_guid=bill_guid,
+            payment_date=bill_data['date'],
+            checking_account_guid=test_accounts['checking_account'],
+            memo=bill_data['memo'],
+        )
+
+        with pytest.raises(ValueError, match="already paid"):
+            gnucash_db.pay_bill(
+                bill_guid=bill_guid,
+                payment_date=bill_data['date'],
+                checking_account_guid=test_accounts['checking_account'],
+                memo=bill_data['memo'],
+            )
+
+    def test_pay_bill_uses_invoice_notes_when_memo_missing(self, db_connection, test_vendor_guid, test_accounts, bill_data):
+        """If no memo is passed, pay_bill() should store invoice notes in transaction notes."""
+        bill_guid = gnucash_db.create_bill(
+            vendor_guid=test_vendor_guid,
+            expense_account_guid=test_accounts['expense_account'],
+            amount=bill_data['amount'],
+            memo=bill_data['memo'],
+            bill_date=bill_data['date'],
+        )
+        gnucash_db.post_bill(
+            bill_guid=bill_guid,
+            post_date=bill_data['date'],
+            ap_account_guid=test_accounts['ap_account'],
+        )
+
+        payment_txn_guid = gnucash_db.pay_bill(
+            bill_guid=bill_guid,
+            payment_date=bill_data['date'],
+            checking_account_guid=test_accounts['checking_account'],
+            memo=None,
+        )
+
+        conn = sqlite3.connect(db_connection)
+        cursor = conn.cursor()
+        row = cursor.execute(
+            "SELECT string_val FROM slots WHERE obj_guid = ? AND name = 'notes'",
+            (payment_txn_guid,),
+        ).fetchone()
+        conn.close()
+
+        assert row is not None
+        assert row[0] == bill_data['memo']
+
+    def test_pay_bill_splits_balance_to_zero(self, db_connection, test_vendor_guid, test_accounts, bill_data):
+        """Payment transaction should always be balanced (sum of split values equals zero)."""
+        bill_guid = gnucash_db.create_bill(
+            vendor_guid=test_vendor_guid,
+            expense_account_guid=test_accounts['expense_account'],
+            amount=bill_data['amount'],
+            memo=bill_data['memo'],
+            bill_date=bill_data['date'],
+        )
+        gnucash_db.post_bill(
+            bill_guid=bill_guid,
+            post_date=bill_data['date'],
+            ap_account_guid=test_accounts['ap_account'],
+        )
+        payment_txn_guid = gnucash_db.pay_bill(
+            bill_guid=bill_guid,
+            payment_date=bill_data['date'],
+            checking_account_guid=test_accounts['checking_account'],
+            memo=bill_data['memo'],
+        )
+
+        conn = sqlite3.connect(db_connection)
+        cursor = conn.cursor()
+        row = cursor.execute(
+            "SELECT SUM(value_num) FROM splits WHERE tx_guid = ?",
+            (payment_txn_guid,),
+        ).fetchone()
+        conn.close()
+
+        assert row is not None
+        assert row[0] == 0
+
+    def test_fractional_amount_truncation_is_consistent_across_workflow(self, db_connection, test_vendor_guid, test_accounts, bill_data):
+        """Amounts with 3+ decimal places should use the same integer-cent value in all workflow steps."""
+        fractional_amount = 123.456
+        expected_amount_num = int(fractional_amount * 100)
+
+        bill_guid = gnucash_db.create_bill(
+            vendor_guid=test_vendor_guid,
+            expense_account_guid=test_accounts['expense_account'],
+            amount=fractional_amount,
+            memo="Fractional precision test",
+            bill_date=bill_data['date'],
+        )
+        gnucash_db.post_bill(
+            bill_guid=bill_guid,
+            post_date=bill_data['date'],
+            ap_account_guid=test_accounts['ap_account'],
+        )
+        payment_txn_guid = gnucash_db.pay_bill(
+            bill_guid=bill_guid,
+            payment_date=bill_data['date'],
+            checking_account_guid=test_accounts['checking_account'],
+            memo="Fractional precision test",
+        )
+
+        conn = sqlite3.connect(db_connection)
+        cursor = conn.cursor()
+        entry_row = cursor.execute(
+            "SELECT b_price_num, b_price_denom FROM entries WHERE bill = ?",
+            (bill_guid,),
+        ).fetchone()
+        split_values = cursor.execute(
+            "SELECT value_num FROM splits WHERE tx_guid = ? ORDER BY value_num DESC",
+            (payment_txn_guid,),
+        ).fetchall()
+        conn.close()
+
+        assert entry_row is not None
+        assert entry_row[0] == expected_amount_num
+        assert entry_row[1] == 100
+        assert len(split_values) == 2
+        assert split_values[0][0] == expected_amount_num
+        assert split_values[1][0] == -expected_amount_num
+
     @pytest.mark.manual
     def test_gnucash_ui_verification(self, db_connection, test_vendor_guid, test_accounts, bill_data):
         """Manual test: Create a bill and verify it appears correctly in GnuCash UI"""
