@@ -20,7 +20,7 @@ set /a elapsed=0
 curl -s -o nul -w "" http://localhost:7432/status >nul 2>&1
 if !errorlevel! equ 0 goto server_ready
 if !elapsed! geq !max_wait_seconds! goto server_failed
-powershell -NoProfile -Command "Start-Sleep -Seconds 1" >nul 2>&1
+timeout /t 1 /nobreak >nul
 set /a elapsed+=1
 goto wait_loop
 
