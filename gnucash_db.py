@@ -1392,17 +1392,23 @@ def get_samuse_account_guid() -> str:
 
 
 def get_cash_accounts() -> list:
-    """Get all non-placeholder INCOME and ASSET accounts from the GnuCash DB.
+    """Get all non-placeholder INCOME, ASSET, CASH, and BANK accounts from the GnuCash DB.
 
     Returns list of dicts with 'name' and 'guid' keys, sorted by name.
     """
     with get_connection() as conn:
         cursor = conn.execute("""
             SELECT guid, name FROM accounts
-            WHERE account_type IN (?, ?)
+            WHERE account_type IN (?, ?, ?, ?)
             AND placeholder = ?
             ORDER BY name
-        """, (config.ACCOUNT_TYPE_INCOME, config.ACCOUNT_TYPE_ASSET, config.PLACEHOLDER_FALSE))
+        """, (
+            config.ACCOUNT_TYPE_INCOME,
+            config.ACCOUNT_TYPE_ASSET,
+            "CASH",
+            config.ACCOUNT_TYPE_BANK,
+            config.PLACEHOLDER_FALSE,
+        ))
         return [dict(row) for row in cursor]
 
 

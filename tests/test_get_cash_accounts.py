@@ -38,23 +38,32 @@ class TestGetCashAccounts:
             result = gnucash_db.get_cash_accounts()
         assert any(r["name"] == "Cash on Hand" for r in result)
 
+    def test_returns_bank_accounts(self):
+        rows = [_row("d" * 32, "Primary Checking")]
+        conn = _make_fake_conn(rows)
+        with patch("bill_processor.gnucash_db.get_connection", return_value=conn):
+            result = gnucash_db.get_cash_accounts()
+        assert any(r["name"] == "Primary Checking" for r in result)
+
     def test_returns_empty_list_when_no_accounts(self):
         conn = _make_fake_conn([])
         with patch("bill_processor.gnucash_db.get_connection", return_value=conn):
             result = gnucash_db.get_cash_accounts()
         assert result == []
 
-    def test_queries_income_and_asset_types(self):
+    def test_queries_income_asset_cash_and_bank_types(self):
         conn = _make_fake_conn([])
         with patch("bill_processor.gnucash_db.get_connection", return_value=conn):
             gnucash_db.get_cash_accounts()
         # Check SQL contains account_type IN clause
         sql = conn.execute.call_args[0][0].upper()
         assert "ACCOUNT_TYPE IN" in sql
-        # Check parameters include INCOME and ASSET types
+        # Check parameters include INCOME, ASSET, CASH, and BANK types
         params = conn.execute.call_args[0][1] if len(conn.execute.call_args[0]) > 1 else ()
         assert config.ACCOUNT_TYPE_INCOME in params
         assert config.ACCOUNT_TYPE_ASSET in params
+        assert "CASH" in params
+        assert config.ACCOUNT_TYPE_BANK in params
 
     def test_excludes_placeholder_accounts(self):
         conn = _make_fake_conn([])
