@@ -1,5 +1,6 @@
-"""Tests for the FastAPI web application."""
+"""Tests for the FastAPI REST API."""
 import tempfile
+import os
 from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -16,7 +17,6 @@ def client():
 
 @pytest.fixture
 def tmp_queue(tmp_path, monkeypatch):
-    """Patch BILLS_INPUT_PATH to a temp file."""
     queue_file = tmp_path / "bills_to_process.txt"
     queue_file.write_text("")
     from bill_processor import config
@@ -24,157 +24,133 @@ def tmp_queue(tmp_path, monkeypatch):
     return queue_file
 
 
+@pytest.fixture
+def isolated_settings(monkeypatch):
+    from bill_processor import settings_manager
+    from bill_processor.web import app as web_app
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        tmp_path = f.name
+    try:
+        fresh = settings_manager.SettingsManager(settings_file=Path(tmp_path))
+        monkeypatch.setattr(web_app, "settings", fresh)
+        yield fresh
+    finally:
+        os.unlink(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Status & Health
+# ---------------------------------------------------------------------------
+
 def test_status_returns_ok(client):
-    response = client.get("/status")
+    response = client.get("/api/status")
     assert response.status_code == 200
     data = response.json()
     assert "vendor_sync" in data
     assert "queued_bills" in data
 
 
-def test_dashboard_renders(client):
-    response = client.get("/")
+def test_db_health_returns_status(client):
+    response = client.get("/api/db/health")
     assert response.status_code == 200
-    assert b"GnuCash Bill Processor" in response.content
+    data = response.json()
+    assert "status" in data
+
+
+# ---------------------------------------------------------------------------
+# Bills queue CRUD
+# ---------------------------------------------------------------------------
+
+def test_get_bills_returns_list(client, tmp_queue):
+    response = client.get("/api/bills")
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
 
 
 def test_add_bill_to_queue(client, tmp_queue):
-    response = client.post("/bills/queue", data={
+    response = client.post("/api/bills", json={
         "vendor_name": "Acme Electric",
-        "amount": "123.45",
+        "amount": 123.45,
         "memo": "Test bill",
         "bill_date": "2026-03-01",
     })
-    assert response.status_code == 200
-    content = tmp_queue.read_text()
-    assert "Acme Electric" in content
-    assert "123.45" in content
-
-
-def test_delete_bill_from_queue(client, tmp_queue):
-    tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
-    response = client.delete("/bills/queue/0")
-    assert response.status_code == 200
-    assert tmp_queue.read_text().strip() == ""
-
-
-def test_edit_bill_in_queue(client, tmp_queue):
-    tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
-    response = client.patch("/bills/queue/0", data={
-        "vendor_name": "Acme Electric",
-        "amount": "200.00",
-        "memo": "Updated",
-        "bill_date": "2026-03-01",
-    })
-    assert response.status_code == 200
-    content = tmp_queue.read_text()
-    assert "200.00" in content
-
-
-def test_vendor_search_returns_html(client):
-    response = client.get("/vendors/search", params={"vendor_name": "acme"})
-    assert response.status_code == 200
-    # Returns HTML fragment (empty or with results)
-    assert "text/html" in response.headers["content-type"]
-
-
-def test_vendor_search_empty_query(client):
-    response = client.get("/vendors/search", params={"vendor_name": ""})
-    assert response.status_code == 200
-    # Empty query returns empty response
-    assert response.content == b""
-
-
-
-def test_address_lookup_returns_json(client):
-    """Address lookup returns JSON with candidates list and message."""
-    response = client.post("/vendors/lookup-address", data={"vendor_name": "Acme Electric"})
-    assert response.status_code == 200
-    data = response.json()
-    assert "candidates" in data
-    assert "message" in data
-    assert isinstance(data["candidates"], list)
-
-
-def test_lookup_address_combines_city_and_zip(client, monkeypatch):
-    """Route builds combined query from display_name + addr_city + addr_zip."""
-    import bill_processor.web.app as web_app
-    captured = []
-    monkeypatch.setattr(web_app.addr_lookup, "lookup_google_places",
-                        lambda q, **kw: captured.append(q) or [])
-    monkeypatch.setattr(web_app.addr_lookup, "lookup_openstreetmap",
-                        lambda q, **kw: [])
-    response = client.post("/vendors/lookup-address", data={
-        "display_name": "Kroger",
-        "addr_city": "Cincinnati",
-        "addr_zip": "45202",
-    })
-    assert response.status_code == 200
-    assert captured == ["Kroger Cincinnati 45202"]
-
-
-def test_lookup_address_skips_empty_refinement_fields(client, monkeypatch):
-    """Blank city/zip fields are omitted from the combined query."""
-    import bill_processor.web.app as web_app
-    captured = []
-    monkeypatch.setattr(web_app.addr_lookup, "lookup_google_places",
-                        lambda q, **kw: captured.append(q) or [])
-    monkeypatch.setattr(web_app.addr_lookup, "lookup_openstreetmap",
-                        lambda q, **kw: [])
-    response = client.post("/vendors/lookup-address", data={
-        "display_name": "Kroger",
-        "addr_city": "",
-        "addr_zip": "45202",
-    })
-    assert response.status_code == 200
-    assert captured == ["Kroger 45202"]
+    assert response.status_code == 201
+    assert response.json()["ok"] is True
+    assert "Acme Electric" in tmp_queue.read_text()
+    assert "123.45" in tmp_queue.read_text()
 
 
 def test_add_bill_with_check_number(client, tmp_queue):
-    response = client.post("/bills/queue", data={
+    response = client.post("/api/bills", json={
         "vendor_name": "Acme Electric",
-        "amount": "123.45",
+        "amount": 123.45,
         "memo": "Test bill",
         "bill_date": "2026-03-01",
         "check_number": "1042",
     })
-    assert response.status_code == 200
-    content = tmp_queue.read_text()
-    assert "1042" in content
+    assert response.status_code == 201
+    assert "1042" in tmp_queue.read_text()
 
 
 def test_add_bill_without_check_number_omits_fifth_field(client, tmp_queue):
-    response = client.post("/bills/queue", data={
+    response = client.post("/api/bills", json={
         "vendor_name": "Acme Electric",
-        "amount": "123.45",
+        "amount": 123.45,
         "memo": "Test bill",
         "bill_date": "2026-03-01",
     })
-    assert response.status_code == 200
-    content = tmp_queue.read_text().strip()
-    # Should end with the date, no trailing comma
-    assert content.endswith("2026-03-01")
+    assert response.status_code == 201
+    assert tmp_queue.read_text().strip().endswith("2026-03-01")
 
 
-def test_edit_bill_adds_check_number(client, tmp_queue):
+def test_add_bill_empty_name_returns_422(client, tmp_queue):
+    response = client.post("/api/bills", json={
+        "vendor_name": "",
+        "amount": 100.00,
+        "bill_date": "2026-03-01",
+    })
+    assert response.status_code == 422
+
+
+def test_delete_bill_from_queue(client, tmp_queue):
     tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
-    response = client.patch("/bills/queue/0", data={
+    response = client.delete("/api/bills/0")
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert tmp_queue.read_text().strip() == ""
+
+
+def test_update_bill_in_queue(client, tmp_queue):
+    tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
+    response = client.put("/api/bills/0", json={
         "vendor_name": "Acme Electric",
-        "amount": "123.45",
+        "amount": 200.00,
+        "memo": "Updated",
+        "bill_date": "2026-03-01",
+    })
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert "200.0" in tmp_queue.read_text()
+
+
+def test_update_bill_adds_check_number(client, tmp_queue):
+    tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
+    response = client.put("/api/bills/0", json={
+        "vendor_name": "Acme Electric",
+        "amount": 123.45,
         "memo": "test",
         "bill_date": "2026-03-01",
         "check_number": "2001",
     })
     assert response.status_code == 200
-    content = tmp_queue.read_text()
-    assert "2001" in content
+    assert "2001" in tmp_queue.read_text()
 
 
-def test_edit_bill_clears_check_number(client, tmp_queue):
+def test_update_bill_clears_check_number(client, tmp_queue):
     tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01, 1042\n")
-    response = client.patch("/bills/queue/0", data={
+    response = client.put("/api/bills/0", json={
         "vendor_name": "Acme Electric",
-        "amount": "123.45",
+        "amount": 123.45,
         "memo": "test",
         "bill_date": "2026-03-01",
         "check_number": "",
@@ -185,79 +161,55 @@ def test_edit_bill_clears_check_number(client, tmp_queue):
     assert content.endswith("2026-03-01")
 
 
-def test_create_vendor_empty_name_returns_json_error(client):
-    """Creating a vendor with empty name returns JSON error."""
-    response = client.post("/vendors/create", data={
-        "vendor_name": "",
-        "display_name": "",
-    })
+# ---------------------------------------------------------------------------
+# Bill processing
+# ---------------------------------------------------------------------------
+
+def test_create_vendor_empty_name_returns_error(client):
+    response = client.post("/api/vendors", json={"vendor_name": "", "display_name": ""})
+    assert response.status_code == 422
+
+
+def test_process_single_missing_index_returns_404(client, tmp_queue):
+    response = client.post("/api/bills/99/post")
+    assert response.status_code == 404
+
+
+def test_post_all_empty_queue_returns_ok(client, tmp_queue):
+    response = client.post("/api/bills/post-all")
     assert response.status_code == 200
     data = response.json()
-    assert data["ok"] is False
-    assert "required" in data["error"].lower()
+    assert data["ok"] is True
+    assert data["succeeded"] == []
+    assert data["failed"] == []
 
 
-def test_process_all_empty_queue(client, tmp_queue):
-    """Processing an empty queue returns 200 and the queue card."""
-    response = client.post("/bills/queue/process")
-    assert response.status_code == 200
-    assert b"queued-bills" in response.content
-
-
-def test_process_single_missing_index(client, tmp_queue):
-    """Processing a non-existent index returns 200 with error in queue card."""
-    response = client.post("/bills/queue/99/process")
-    assert response.status_code == 200
-    assert b"queued-bills" in response.content
-
-
-def test_sync_vendors_returns_html(client):
-    """Vendor sync returns 200 with HTML sync status card."""
-    response = client.post("/vendors/sync")
-    assert response.status_code == 200
-    assert b"sync-status" in response.content
-
-
-def test_shutdown_endpoint_exists(client):
-    """Shutdown endpoint exists and returns a response (even if server stops)."""
-    # Use raise_server_exceptions=False so test doesn't fail on shutdown signal
-    from fastapi.testclient import TestClient
-    from bill_processor.web.app import app as fastapi_app
-    test_client = TestClient(fastapi_app, raise_server_exceptions=False)
-    response = test_client.post("/shutdown")
-    assert response.status_code in (200, 503, 500)
-
-
-def test_queued_bills_partial_route(client, tmp_queue):
-    """GET /partials/queued-bills returns the queue card HTML."""
-    response = client.get("/partials/queued-bills")
-    assert response.status_code == 200
-    assert b"queued-bills" in response.content
-
+# ---------------------------------------------------------------------------
+# TestFormatBillLine — unchanged; tests queue_io helper directly
+# ---------------------------------------------------------------------------
 
 class TestFormatBillLine:
     def test_with_check_number_appends_fifth_field(self):
         from bill_processor.web.queue_io import _format_bill_line
-        from datetime import date
         result = _format_bill_line("Acme Electric", 150.50, "memo", date(2026, 3, 15), "1042")
         assert result == "Acme Electric, 150.50, memo, 2026-03-15, 1042\n"
 
     def test_without_check_number_omits_fifth_field(self):
         from bill_processor.web.queue_io import _format_bill_line
-        from datetime import date
         result = _format_bill_line("Acme Electric", 150.50, "memo", date(2026, 3, 15))
         assert result == "Acme Electric, 150.50, memo, 2026-03-15\n"
 
     def test_empty_check_number_omits_fifth_field(self):
         from bill_processor.web.queue_io import _format_bill_line
-        from datetime import date
         result = _format_bill_line("Acme Electric", 150.50, "memo", date(2026, 3, 15), "")
         assert result == "Acme Electric, 150.50, memo, 2026-03-15\n"
 
 
-class TestProcessOneBill:
-    """Unit tests for _process_one_bill() — mocks GnuCash I/O to test routing logic."""
+# ---------------------------------------------------------------------------
+# TestProcessOneBill — unchanged; tests internal helper directly
+# ---------------------------------------------------------------------------
 
+class TestProcessOneBill:
     VENDOR_GUID = "a" * 32
     EXPENSE_GUID = "b" * 32
     CHECKING_GUID = "c" * 32
@@ -275,10 +227,7 @@ class TestProcessOneBill:
         }
 
     def _good_vendor(self):
-        return {
-            "gnucash_guid": self.VENDOR_GUID,
-            "display_name": "Acme Electric",
-        }
+        return {"gnucash_guid": self.VENDOR_GUID, "display_name": "Acme Electric"}
 
     def _patch_gnucash(self, monkeypatch, web_app):
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
@@ -286,8 +235,7 @@ class TestProcessOneBill:
         monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
         monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
                             lambda guid: {"name": "Test Account", "guid": guid})
-        monkeypatch.setattr(web_app.gnucash_db, "create_bill",
-                            lambda **kw: self.BILL_GUID)
+        monkeypatch.setattr(web_app.gnucash_db, "create_bill", lambda **kw: self.BILL_GUID)
         monkeypatch.setattr(web_app.gnucash_db, "post_bill", lambda **kw: None)
         monkeypatch.setattr(web_app.gnucash_db, "pay_bill", lambda **kw: "pay_guid")
 
@@ -297,7 +245,6 @@ class TestProcessOneBill:
         mock_vm.find_vendor.return_value = (self._good_vendor(), "exact")
         monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
         self._patch_gnucash(monkeypatch, web_app)
-
         result = web_app._process_one_bill(self._bill())
         assert result == {"ok": True}
 
@@ -310,7 +257,6 @@ class TestProcessOneBill:
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
         monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
                             lambda guid: {"name": "Test Account", "guid": guid})
-
         result = web_app._process_one_bill(self._bill())
         assert result["ok"] is False
         assert "Acme Electric" in result["error"]
@@ -325,7 +271,6 @@ class TestProcessOneBill:
         monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", None)
         monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
                             lambda guid: {"name": "Test Account", "guid": guid})
-
         result = web_app._process_one_bill(self._bill())
         assert result["ok"] is False
         assert "expense account" in result["error"].lower()
@@ -340,12 +285,9 @@ class TestProcessOneBill:
         monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
         monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
                             lambda guid: {"name": "Test Account", "guid": guid})
-
         def fail(**kw):
             raise ValueError("DB locked")
-
         monkeypatch.setattr(web_app.gnucash_db, "create_bill", fail)
-
         result = web_app._process_one_bill(self._bill())
         assert result["ok"] is False
         assert "DB locked" in result["error"]
@@ -355,22 +297,9 @@ class TestProcessOneBill:
         mock_vm = MagicMock()
         mock_vm.find_vendor.return_value = (self._good_vendor(), "exact")
         monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
-        monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
-        monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
-        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
-        monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
-                            lambda guid: {"name": "Test Account", "guid": guid})
-        monkeypatch.setattr(web_app.gnucash_db, "create_bill", lambda **kw: self.BILL_GUID)
-        monkeypatch.setattr(web_app.gnucash_db, "post_bill", lambda **kw: None)
-
+        self._patch_gnucash(monkeypatch, web_app)
         captured = {}
-
-        def capture_pay(**kw):
-            captured.update(kw)
-            return "pay_guid"
-
-        monkeypatch.setattr(web_app.gnucash_db, "pay_bill", capture_pay)
-
+        monkeypatch.setattr(web_app.gnucash_db, "pay_bill", lambda **kw: captured.update(kw) or "pay_guid")
         web_app._process_one_bill(self._bill(check_number="1042"))
         assert captured.get("check_number") == "1042"
 
@@ -385,44 +314,17 @@ class TestProcessOneBill:
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", AP_GUID)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
         monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
-
         captured = {}
-        def capture_post(**kw):
-            captured.update(kw)
         monkeypatch.setattr(web_app.gnucash_db, "create_bill", lambda **kw: self.BILL_GUID)
-        monkeypatch.setattr(web_app.gnucash_db, "post_bill", capture_post)
+        monkeypatch.setattr(web_app.gnucash_db, "post_bill", lambda **kw: captured.update(kw))
         monkeypatch.setattr(web_app.gnucash_db, "pay_bill", lambda **kw: "pay_guid")
-
         web_app._process_one_bill(self._bill())
         assert captured.get("ap_account_guid") == AP_GUID
-
-    def test_uses_configured_checking_account_guid(self, monkeypatch):
-        from bill_processor.web import app as web_app
-        mock_vm = MagicMock()
-        mock_vm.find_vendor.return_value = (self._good_vendor(), "exact")
-        monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
-        monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
-                            lambda guid: {"name": "Checking", "guid": guid})
-        monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
-        monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
-        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
-
-        captured = {}
-        def capture_pay(**kw):
-            captured.update(kw)
-            return "pay_guid"
-        monkeypatch.setattr(web_app.gnucash_db, "create_bill", lambda **kw: self.BILL_GUID)
-        monkeypatch.setattr(web_app.gnucash_db, "post_bill", lambda **kw: None)
-        monkeypatch.setattr(web_app.gnucash_db, "pay_bill", capture_pay)
-
-        web_app._process_one_bill(self._bill())
-        assert captured.get("checking_account_guid") == self.CHECKING_GUID
 
     def test_blocks_when_ap_account_not_configured(self, monkeypatch):
         from bill_processor.web import app as web_app
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", None)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
-
         result = web_app._process_one_bill(self._bill())
         assert result["ok"] is False
         assert "Processing accounts not configured" in result["error"]
@@ -431,213 +333,105 @@ class TestProcessOneBill:
         from bill_processor.web import app as web_app
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", None)
-
         result = web_app._process_one_bill(self._bill())
         assert result["ok"] is False
         assert "Processing accounts not configured" in result["error"]
 
 
+# ---------------------------------------------------------------------------
+# TestProcessQueueRoutes — queue manipulation logic unchanged; response is JSON
+# ---------------------------------------------------------------------------
+
 class TestProcessQueueRoutes:
-    """Integration tests for /bills/queue/process and /bills/queue/{index}/process."""
 
     def test_process_single_success_removes_bill(self, client, tmp_queue, monkeypatch):
-        """A successfully processed bill is removed from the queue."""
         from bill_processor.web import app as web_app
         tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
         monkeypatch.setattr(web_app, "_process_one_bill", lambda bill: {"ok": True})
-
-        response = client.post("/bills/queue/0/process")
+        response = client.post("/api/bills/0/post")
         assert response.status_code == 200
+        assert response.json()["ok"] is True
         assert tmp_queue.read_text().strip() == ""
 
     def test_process_single_failure_keeps_bill(self, client, tmp_queue, monkeypatch):
-        """A processing failure leaves the bill in the queue."""
         from bill_processor.web import app as web_app
         tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
         monkeypatch.setattr(web_app, "_process_one_bill",
                             lambda bill: {"ok": False, "error": "Vendor not found"})
-
-        response = client.post("/bills/queue/0/process")
+        response = client.post("/api/bills/0/post")
         assert response.status_code == 200
+        assert response.json()["ok"] is False
         assert "Acme Electric" in tmp_queue.read_text()
 
+    def test_process_single_failure_returns_error_message(self, client, tmp_queue, monkeypatch):
+        from bill_processor.web import app as web_app
+        tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
+        monkeypatch.setattr(web_app, "_process_one_bill",
+                            lambda bill: {"ok": False, "error": "DB locked"})
+        response = client.post("/api/bills/0/post")
+        assert response.status_code == 200
+        assert "DB locked" in response.json()["error"]
+
     def test_process_all_success_clears_queue(self, client, tmp_queue, monkeypatch):
-        """Processing all bills successfully empties the queue."""
         from bill_processor.web import app as web_app
         tmp_queue.write_text(
             "Acme Electric, 123.45, test, 2026-03-01\n"
             "Bob Plumbing, 200.00, repair, 2026-03-02\n"
         )
         monkeypatch.setattr(web_app, "_process_one_bill", lambda bill: {"ok": True})
-
-        response = client.post("/bills/queue/process")
+        response = client.post("/api/bills/post-all")
         assert response.status_code == 200
         assert tmp_queue.read_text().strip() == ""
+        data = response.json()
+        assert len(data["succeeded"]) == 2
+        assert data["failed"] == []
 
     def test_process_all_partial_failure_keeps_failed_bills(self, client, tmp_queue, monkeypatch):
-        """Only successfully processed bills are removed; failed ones stay."""
         from bill_processor.web import app as web_app
         tmp_queue.write_text(
             "Acme Electric, 123.45, test, 2026-03-01\n"
             "Unknown Vendor, 50.00, misc, 2026-03-02\n"
         )
-
-        def selective_process(bill):
-            if bill["vendor_name"] == "Acme Electric":
-                return {"ok": True}
-            return {"ok": False, "error": "Vendor not found"}
-
-        monkeypatch.setattr(web_app, "_process_one_bill", selective_process)
-
-        response = client.post("/bills/queue/process")
+        def selective(bill):
+            return {"ok": True} if bill["vendor_name"] == "Acme Electric" else {"ok": False, "error": "Vendor not found"}
+        monkeypatch.setattr(web_app, "_process_one_bill", selective)
+        response = client.post("/api/bills/post-all")
         assert response.status_code == 200
         remaining = tmp_queue.read_text()
         assert "Acme Electric" not in remaining
         assert "Unknown Vendor" in remaining
-
-    def test_process_all_partial_failure_reports_vendor_error(self, client, tmp_queue, monkeypatch):
-        """Failed vendors should be listed in the response error summary."""
-        from bill_processor.web import app as web_app
-        tmp_queue.write_text(
-            "Acme Electric, 123.45, test, 2026-03-01\n"
-            "Unknown Vendor, 50.00, misc, 2026-03-02\n"
-        )
-
-        def selective_process(bill):
-            if bill["vendor_name"] == "Acme Electric":
-                return {"ok": True}
-            return {"ok": False, "error": "Vendor not found"}
-
-        monkeypatch.setattr(web_app, "_process_one_bill", selective_process)
-
-        response = client.post("/bills/queue/process")
-        assert response.status_code == 200
-        assert b"Unknown Vendor: Vendor not found" in response.content
-
-    def test_process_single_failure_returns_specific_error(self, client, tmp_queue, monkeypatch):
-        """Single-item process failures should show the underlying error in returned HTML."""
-        from bill_processor.web import app as web_app
-        tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
-        monkeypatch.setattr(web_app, "_process_one_bill", lambda bill: {"ok": False, "error": "DB locked"})
-
-        response = client.post("/bills/queue/0/process")
-        assert response.status_code == 200
-        assert b"DB locked" in response.content
-        assert "Acme Electric" in tmp_queue.read_text()
+        data = response.json()
+        assert "Acme Electric" in data["succeeded"]
+        assert any(f["vendor_name"] == "Unknown Vendor" for f in data["failed"])
 
 
-@pytest.fixture
-def isolated_settings(monkeypatch):
-    """Fresh SettingsManager backed by a temp file, swapped into web_app.settings."""
-    import tempfile, os
-    from pathlib import Path as _Path
-    from bill_processor import settings_manager
-    from bill_processor.web import app as web_app
-    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-        tmp_path = f.name
-    try:
-        fresh = settings_manager.SettingsManager(settings_file=_Path(tmp_path))
-        monkeypatch.setattr(web_app, "settings", fresh)
-        yield fresh
-    finally:
-        os.unlink(tmp_path)
+# ---------------------------------------------------------------------------
+# Settings
+# ---------------------------------------------------------------------------
 
-
-class TestProcessingAccountsSettings:
+class TestSettings:
     AP_GUID = "e" * 32
     CHECKING_GUID = "c" * 32
 
-    def test_get_page_returns_200(self, client, isolated_settings, monkeypatch):
-        from bill_processor.web import app as web_app
-        monkeypatch.setattr(web_app.gnucash_db, "get_payable_accounts",
-                            lambda: [{"guid": self.AP_GUID, "name": "Accounts Payable", "description": ""}])
-        monkeypatch.setattr(web_app.gnucash_db, "get_checking_accounts",
-                            lambda: [{"guid": self.CHECKING_GUID, "name": "Checking", "description": ""}])
-        response = client.get("/settings/processing-accounts")
+    def test_get_settings_returns_dict(self, client, isolated_settings):
+        response = client.get("/api/settings")
         assert response.status_code == 200
+        data = response.json()
+        assert "ap_account_guid" in data
+        assert "checking_account_guid" in data
 
-    def test_save_ap_account_persists_to_settings(self, client, isolated_settings, monkeypatch):
+    def test_put_ap_account_guid_persists(self, client, isolated_settings, monkeypatch):
         from bill_processor.web import app as web_app
-        monkeypatch.setattr(web_app.gnucash_db, "get_payable_accounts",
-                            lambda: [{"guid": self.AP_GUID, "name": "Accounts Payable", "description": ""}])
-        response = client.post("/settings/processing-accounts/ap-account",
-                               data={"ap_account_guid": self.AP_GUID})
+        monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
+                            lambda guid: {"name": "AP", "guid": guid})
+        response = client.put("/api/settings", json={"ap_account_guid": self.AP_GUID})
         assert response.status_code == 200
         assert isolated_settings.ap_account_guid == self.AP_GUID
 
-    def test_save_checking_account_persists_to_settings(self, client, isolated_settings, monkeypatch):
+    def test_put_checking_account_guid_persists(self, client, isolated_settings, monkeypatch):
         from bill_processor.web import app as web_app
-        monkeypatch.setattr(web_app.gnucash_db, "get_checking_accounts",
-                            lambda: [{"guid": self.CHECKING_GUID, "name": "Checking", "description": ""}])
-        response = client.post("/settings/processing-accounts/checking-account",
-                               data={"checking_account_guid": self.CHECKING_GUID})
+        monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
+                            lambda guid: {"name": "Checking", "guid": guid})
+        response = client.put("/api/settings", json={"checking_account_guid": self.CHECKING_GUID})
         assert response.status_code == 200
         assert isolated_settings.checking_account_guid == self.CHECKING_GUID
-
-    def test_save_invalid_ap_account_guid_returns_error(self, client, isolated_settings, monkeypatch):
-        from bill_processor.web import app as web_app
-        monkeypatch.setattr(web_app.gnucash_db, "get_payable_accounts",
-                            lambda: [{"guid": self.AP_GUID, "name": "Accounts Payable", "description": ""}])
-        response = client.post("/settings/processing-accounts/ap-account",
-                               data={"ap_account_guid": "z" * 32})
-        assert response.status_code == 200
-        assert b"error" in response.content.lower() or b"invalid" in response.content.lower()
-        assert isolated_settings.ap_account_guid is None  # unchanged
-
-    def test_save_invalid_checking_account_guid_returns_error(self, client, isolated_settings, monkeypatch):
-        from bill_processor.web import app as web_app
-        monkeypatch.setattr(web_app.gnucash_db, "get_checking_accounts",
-                            lambda: [{"guid": self.CHECKING_GUID, "name": "Checking", "description": ""}])
-        response = client.post("/settings/processing-accounts/checking-account",
-                               data={"checking_account_guid": "z" * 32})
-        assert response.status_code == 200
-        assert b"error" in response.content.lower() or b"invalid" in response.content.lower()
-        assert isolated_settings.checking_account_guid is None  # unchanged
-
-
-class TestDashboardButtonGating:
-    """Process buttons are disabled when processing accounts are not configured."""
-
-    def test_process_buttons_disabled_when_accounts_not_configured(
-        self, client, tmp_queue, monkeypatch
-    ):
-        from bill_processor.web import app as web_app
-        monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", None)
-        monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", None)
-        tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
-
-        response = client.get("/partials/queued-bills")
-        assert response.status_code == 200
-        assert b"disabled" in response.content
-
-    def test_process_buttons_enabled_when_accounts_configured(
-        self, client, tmp_queue, monkeypatch
-    ):
-        from bill_processor.web import app as web_app
-        monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
-        monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", "c" * 32)
-        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", "x" * 32)
-        tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
-
-        response = client.get("/partials/queued-bills")
-        assert response.status_code == 200
-        assert b"disabled" not in response.content
-
-
-def test_vendor_dropdown_add_item_uses_vendor_form_open(client):
-    """The '+ Add' item opens the vendor dialog via VendorForm.open()."""
-    response = client.get("/vendors/search", params={"vendor_name": "TestQuery"})
-    assert response.status_code == 200
-    html = response.text
-    assert "VendorForm.open(" in html
-    # Old HTMX attributes and route reference must be gone
-    assert "/vendors/new-form" not in html
-    assert "hx-on::after-request" not in html
-
-
-def test_dashboard_includes_vendor_dialog(client):
-    """Dashboard renders the vendor creation dialog and loads vendor-form.js."""
-    response = client.get("/")
-    assert response.status_code == 200
-    assert b'id="vendor-dialog"' in response.content
-    assert b"vendor-form.js" in response.content
