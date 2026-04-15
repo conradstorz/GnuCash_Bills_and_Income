@@ -41,6 +41,11 @@ columbo_report.txt
 .claude/
 .superpowers/
 .hypothesis/
+.worktrees/
+
+# React frontend build artifacts
+frontend/dist/
+frontend/node_modules/
 
 # Editor / OS
 .vscode/
