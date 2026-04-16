@@ -1,14 +1,65 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getBills, addBill, updateBill, deleteBill, postBill, postAllBills, type Bill, type BillIn } from '../api/bills'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import api from '@/api/client'
 
 interface RowError { index: number; message: string }
 
 type EditingRow = { mode: 'add' } | { mode: 'edit'; index: number }
 
 const today = () => new Date().toISOString().slice(0, 10)
+
+interface VendorMatch { key: string; display_name: string }
+
+function VendorInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [suggestions, setSuggestions] = useState<VendorMatch[]>([])
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const handleChange = async (v: string) => {
+    onChange(v)
+    if (v.trim().length < 2) { setSuggestions([]); setOpen(false); return }
+    const res = await api.get<{ results: VendorMatch[] }>(`/vendors/search?q=${encodeURIComponent(v)}`)
+    setSuggestions(res.data.results)
+    setOpen(res.data.results.length > 0)
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <Input
+        className="h-7 text-sm"
+        value={value}
+        placeholder="Vendor"
+        autoFocus
+        onChange={e => handleChange(e.target.value)}
+        onFocus={() => suggestions.length > 0 && setOpen(true)}
+      />
+      {open && (
+        <ul className="absolute z-20 w-full bg-white border border-slate-200 rounded shadow-lg max-h-48 overflow-y-auto text-sm">
+          {suggestions.map(s => (
+            <li
+              key={s.key}
+              className="px-3 py-1.5 cursor-pointer hover:bg-blue-50"
+              onMouseDown={() => { onChange(s.display_name); setSuggestions([]); setOpen(false) }}
+            >
+              {s.display_name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 function BillRow({
   bill,
@@ -79,7 +130,7 @@ function EditableRow({
 
   return (
     <tr className="border-b-2 border-blue-400 bg-blue-50">
-      <td className="px-2 py-1"><Input className="h-7 text-sm" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor" autoFocus /></td>
+      <td className="px-2 py-1"><VendorInput value={vendor} onChange={setVendor} /></td>
       <td className="px-2 py-1"><Input className="h-7 text-sm text-right" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></td>
       <td className="px-2 py-1"><Input className="h-7 text-sm" value={memo} onChange={e => setMemo(e.target.value)} placeholder="Memo" /></td>
       <td className="px-2 py-1"><Input className="h-7 text-sm" type="date" value={date} onChange={e => setDate(e.target.value)} /></td>
