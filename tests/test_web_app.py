@@ -435,3 +435,72 @@ class TestSettings:
         response = client.put("/api/settings", json={"checking_account_guid": self.CHECKING_GUID})
         assert response.status_code == 200
         assert isolated_settings.checking_account_guid == self.CHECKING_GUID
+
+
+# ---------------------------------------------------------------------------
+# Vendor search candidates
+# ---------------------------------------------------------------------------
+
+class TestVendorSearchCandidates:
+    GOOGLE_RESULT = [
+        {
+            "name": "The Home Depot",
+            "addr_line1": "4011 Eastgate Dr",
+            "city": "Cincinnati",
+            "state": "OH",
+            "zip": "45245",
+            "source": "google",
+        }
+    ]
+    OSM_RESULT = [
+        {
+            "name": "Home Depot",
+            "addr_line1": "100 Main St",
+            "city": "Columbus",
+            "state": "OH",
+            "zip": "43215",
+            "source": "openstreetmap",
+        }
+    ]
+
+    def test_returns_google_candidates(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        mock_lookup = MagicMock()
+        mock_lookup.lookup_google_places.return_value = self.GOOGLE_RESULT
+        monkeypatch.setattr(web_app, "addr_lookup", mock_lookup)
+        response = client.get("/api/vendors/search-candidates?name=Home+Depot")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["candidates"]) == 1
+        c = data["candidates"][0]
+        assert c["display_name"] == "The Home Depot"
+        assert c["addr_line1"] == "4011 Eastgate Dr"
+        assert c["addr_city"] == "Cincinnati"
+        assert c["addr_state"] == "OH"
+        assert c["addr_zip"] == "45245"
+
+    def test_falls_back_to_osm_when_google_empty(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        mock_lookup = MagicMock()
+        mock_lookup.lookup_google_places.return_value = []
+        mock_lookup.lookup_openstreetmap.return_value = self.OSM_RESULT
+        monkeypatch.setattr(web_app, "addr_lookup", mock_lookup)
+        response = client.get("/api/vendors/search-candidates?name=Home+Depot")
+        assert response.status_code == 200
+        assert len(response.json()["candidates"]) == 1
+        assert response.json()["candidates"][0]["display_name"] == "Home Depot"
+
+    def test_empty_query_returns_empty_list(self, client):
+        response = client.get("/api/vendors/search-candidates")
+        assert response.status_code == 200
+        assert response.json() == {"candidates": []}
+
+    def test_lookup_returns_none_returns_empty_list(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        mock_lookup = MagicMock()
+        mock_lookup.lookup_google_places.return_value = None
+        mock_lookup.lookup_openstreetmap.return_value = None
+        monkeypatch.setattr(web_app, "addr_lookup", mock_lookup)
+        response = client.get("/api/vendors/search-candidates?name=Unknown+Vendor")
+        assert response.status_code == 200
+        assert response.json() == {"candidates": []}

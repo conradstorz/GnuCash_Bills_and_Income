@@ -500,6 +500,30 @@ def lookup_address(body: AddressLookupIn):
     return {"candidates": candidates, "message": f"Found {len(candidates)} result(s)"}
 
 
+@app.get("/api/vendors/search-candidates")
+def vendor_search_candidates(name: str = "", city: str = "", zip: str = ""):
+    parts = [p for p in [name, city, zip] if p.strip()]
+    if not parts:
+        return {"candidates": []}
+    query = " ".join(parts)
+    raw = addr_lookup.lookup_google_places(query, return_all=True) or \
+          addr_lookup.lookup_openstreetmap(query, return_all=True)
+    if not raw:
+        return {"candidates": []}
+    return {
+        "candidates": [
+            {
+                "display_name": r.get("name", ""),
+                "addr_line1": r.get("addr_line1", ""),
+                "addr_city": r.get("city", ""),
+                "addr_state": r.get("state", ""),
+                "addr_zip": r.get("zip", ""),
+            }
+            for r in raw
+        ]
+    }
+
+
 # ---------------------------------------------------------------------------
 # API Routes: Accounts & Memos
 # ---------------------------------------------------------------------------
