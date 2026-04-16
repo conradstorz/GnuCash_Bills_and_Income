@@ -4,6 +4,7 @@ import { getBills, addBill, updateBill, deleteBill, postBill, postAllBills, type
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import api from '@/api/client'
+import CreateVendorModal from '../components/CreateVendorModal'
 
 interface RowError { index: number; message: string }
 
@@ -16,6 +17,8 @@ interface VendorMatch { key: string; display_name: string }
 function VendorInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [suggestions, setSuggestions] = useState<VendorMatch[]>([])
   const [open, setOpen] = useState(false)
+  const [showModal, setShowModal] = useState(false)
+  const [modalInitialName, setModalInitialName] = useState('')
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -31,33 +34,58 @@ function VendorInput({ value, onChange }: { value: string; onChange: (v: string)
     if (v.trim().length < 2) { setSuggestions([]); setOpen(false); return }
     const res = await api.get<{ results: VendorMatch[] }>(`/vendors/search?q=${encodeURIComponent(v)}`)
     setSuggestions(res.data.results)
-    setOpen(res.data.results.length > 0)
+    setOpen(true)
   }
 
+  const showAddNew =
+    value.trim().length >= 2 &&
+    !suggestions.some(s => s.display_name.toLowerCase() === value.trim().toLowerCase())
+
   return (
-    <div className="relative" ref={ref}>
-      <Input
-        className="h-7 text-sm"
-        value={value}
-        placeholder="Vendor"
-        autoFocus
-        onChange={e => handleChange(e.target.value)}
-        onFocus={() => suggestions.length > 0 && setOpen(true)}
-      />
-      {open && (
-        <ul className="absolute z-20 w-full bg-white border border-slate-200 rounded shadow-lg max-h-48 overflow-y-auto text-sm">
-          {suggestions.map(s => (
-            <li
-              key={s.key}
-              className="px-3 py-1.5 cursor-pointer hover:bg-blue-50"
-              onMouseDown={() => { onChange(s.display_name); setSuggestions([]); setOpen(false) }}
-            >
-              {s.display_name}
-            </li>
-          ))}
-        </ul>
+    <>
+      <div className="relative" ref={ref}>
+        <Input
+          className="h-7 text-sm"
+          value={value}
+          placeholder="Vendor"
+          autoFocus
+          onChange={e => handleChange(e.target.value)}
+          onFocus={() => (suggestions.length > 0 || showAddNew) && setOpen(true)}
+        />
+        {open && (suggestions.length > 0 || showAddNew) && (
+          <ul className="absolute z-20 w-full bg-white border border-slate-200 rounded shadow-lg max-h-48 overflow-y-auto text-sm">
+            {suggestions.map(s => (
+              <li
+                key={s.key}
+                className="px-3 py-1.5 cursor-pointer hover:bg-blue-50"
+                onMouseDown={() => { onChange(s.display_name); setSuggestions([]); setOpen(false) }}
+              >
+                {s.display_name}
+              </li>
+            ))}
+            {showAddNew && (
+              <li
+                className="px-3 py-1.5 cursor-pointer hover:bg-green-50 text-green-700 font-medium border-t border-slate-100"
+                onMouseDown={() => {
+                  setModalInitialName(value.trim())
+                  setShowModal(true)
+                  setOpen(false)
+                }}
+              >
+                ＋ Add "{value.trim()}"
+              </li>
+            )}
+          </ul>
+        )}
+      </div>
+      {showModal && (
+        <CreateVendorModal
+          initialName={modalInitialName}
+          onCreated={displayName => { onChange(displayName); setShowModal(false) }}
+          onClose={() => setShowModal(false)}
+        />
       )}
-    </div>
+    </>
   )
 }
 
