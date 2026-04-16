@@ -648,14 +648,13 @@ def shutdown():
 # SPA fallback — must be last
 # ---------------------------------------------------------------------------
 
-if FRONTEND_DIST.exists():
-    _assets_dir = FRONTEND_DIST / "assets"
-    if _assets_dir.exists():
-        app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
-
-
 @app.get("/{full_path:path}")
 def spa_fallback(full_path: str):
+    # Serve static assets from dist/ if they exist as actual files
+    candidate = FRONTEND_DIST / full_path
+    if candidate.exists() and candidate.is_file():
+        return FileResponse(str(candidate))
+    # Fall back to index.html for all other paths (React Router handles routing)
     index = FRONTEND_DIST / "index.html"
     if index.exists():
         return FileResponse(str(index))
