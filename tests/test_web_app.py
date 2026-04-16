@@ -478,6 +478,7 @@ class TestVendorSearchCandidates:
         assert c["addr_city"] == "Cincinnati"
         assert c["addr_state"] == "OH"
         assert c["addr_zip"] == "45245"
+        mock_lookup.lookup_google_places.assert_called_once_with("Home Depot", return_all=True)
 
     def test_falls_back_to_osm_when_google_empty(self, client, monkeypatch):
         from bill_processor.web import app as web_app
@@ -489,6 +490,8 @@ class TestVendorSearchCandidates:
         assert response.status_code == 200
         assert len(response.json()["candidates"]) == 1
         assert response.json()["candidates"][0]["display_name"] == "Home Depot"
+        mock_lookup.lookup_google_places.assert_called_once_with("Home Depot", return_all=True)
+        mock_lookup.lookup_openstreetmap.assert_called_once_with("Home Depot", return_all=True)
 
     def test_empty_query_returns_empty_list(self, client):
         response = client.get("/api/vendors/search-candidates")
