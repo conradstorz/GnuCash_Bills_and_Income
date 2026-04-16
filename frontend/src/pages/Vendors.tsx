@@ -4,6 +4,7 @@ import { getVendors, updateVendor, syncAllVendors, type Vendor, type VendorUpdat
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import CreateVendorModal from '../components/CreateVendorModal'
 
 function VendorDetail({
   vendor,
@@ -145,6 +146,7 @@ export default function Vendors() {
   const { data: vendors = [], isLoading } = useQuery({ queryKey: ['vendors'], queryFn: getVendors })
   const [selected, setSelected] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   const syncMutation = useMutation({
     mutationFn: syncAllVendors,
@@ -164,9 +166,12 @@ export default function Vendors() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold text-slate-800">Vendors</h1>
-        <Button size="sm" variant="outline" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
-          {syncMutation.isPending ? 'Syncing...' : 'Sync All'}
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => setShowCreateModal(true)}>+ New Vendor</Button>
+          <Button size="sm" variant="outline" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
+            {syncMutation.isPending ? 'Syncing...' : 'Sync All'}
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-0 bg-white rounded-lg border border-slate-200 overflow-hidden" style={{ minHeight: 500 }}>
@@ -210,6 +215,14 @@ export default function Vendors() {
           )}
         </div>
       </div>
+
+      {showCreateModal && (
+        <CreateVendorModal
+          initialName=""
+          onCreated={() => setShowCreateModal(false)}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
     </div>
   )
 }
