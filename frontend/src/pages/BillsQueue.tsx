@@ -20,6 +20,8 @@ function VendorInput({ value, onChange }: { value: string; onChange: (v: string)
   const [showModal, setShowModal] = useState(false)
   const [modalInitialName, setModalInitialName] = useState('')
   const ref = useRef<HTMLDivElement>(null)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -29,12 +31,27 @@ function VendorInput({ value, onChange }: { value: string; onChange: (v: string)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const handleChange = async (v: string) => {
+  const handleChange = (v: string) => {
     onChange(v)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     if (v.trim().length < 2) { setSuggestions([]); setOpen(false); return }
-    const res = await api.get<{ results: VendorMatch[] }>(`/vendors/search?q=${encodeURIComponent(v)}`)
-    setSuggestions(res.data.results)
-    setOpen(true)
+    searchTimerRef.current = setTimeout(async () => {
+      if (searchAbortRef.current) searchAbortRef.current.abort()
+      const controller = new AbortController()
+      searchAbortRef.current = controller
+      try {
+        const res = await api.get<{ results: VendorMatch[] }>(
+          `/vendors/search?q=${encodeURIComponent(v)}`,
+          { signal: controller.signal },
+        )
+        setSuggestions(res.data.results)
+        setOpen(true)
+      } catch (e: unknown) {
+        if ((e as { code?: string })?.code !== 'ERR_CANCELED') {
+          setSuggestions([])
+        }
+      }
+    }, 300)
   }
 
   const showAddNew =
