@@ -471,7 +471,7 @@ def vendor_search(q: str = ""):
     # fuzzy_match_vendor returns (best_key, best_score, close_matches)
     # close_matches is a list of (vendor_key, score) tuples
     best_key, best_score, close_matches = fuzzy_match_vendor(
-        q, vm.vendors, threshold=VENDOR_SEARCH_MIN_SCORE
+        q, vendors, threshold=VENDOR_SEARCH_MIN_SCORE
     )
     results = []
     seen = set()
