@@ -19,9 +19,17 @@ function VendorInput({ value, onChange }: { value: string; onChange: (v: string)
   const [open, setOpen] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [modalInitialName, setModalInitialName] = useState('')
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchAbortRef = useRef<AbortController | null>(null)
+
+  const computePos = () => {
+    if (ref.current) {
+      const r = ref.current.getBoundingClientRect()
+      setDropdownPos({ top: r.bottom, left: r.left, width: r.width })
+    }
+  }
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -45,6 +53,7 @@ function VendorInput({ value, onChange }: { value: string; onChange: (v: string)
           { signal: controller.signal },
         )
         setSuggestions(res.data.results)
+        computePos()
         setOpen(true)
       } catch (e: unknown) {
         if ((e as { code?: string })?.code !== 'ERR_CANCELED') {
@@ -60,17 +69,22 @@ function VendorInput({ value, onChange }: { value: string; onChange: (v: string)
 
   return (
     <>
-      <div className="relative" ref={ref}>
+      <div ref={ref}>
         <Input
           className="h-7 text-sm"
           value={value}
           placeholder="Vendor"
           autoFocus
           onChange={e => handleChange(e.target.value)}
-          onFocus={() => (suggestions.length > 0 || showAddNew) && setOpen(true)}
+          onFocus={() => {
+            if (suggestions.length > 0 || showAddNew) { computePos(); setOpen(true) }
+          }}
         />
-        {open && (suggestions.length > 0 || showAddNew) && (
-          <ul className="absolute z-20 w-full bg-white border border-slate-200 rounded shadow-lg max-h-48 overflow-y-auto text-sm">
+        {open && dropdownPos && (suggestions.length > 0 || showAddNew) && (
+          <ul
+            style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
+            className="z-50 bg-white border border-slate-200 rounded shadow-lg max-h-48 overflow-y-auto text-sm"
+          >
             {suggestions.map(s => (
               <li
                 key={s.key}
