@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getBills, addBill, updateBill, deleteBill, postBill, postAllBills, type Bill, type BillIn } from '../api/bills'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,7 @@ function VendorInput({ value, onChange }: { value: string; onChange: (v: string)
   const [modalInitialName, setModalInitialName] = useState('')
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLUListElement>(null)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchAbortRef = useRef<AbortController | null>(null)
 
@@ -33,7 +35,11 @@ function VendorInput({ value, onChange }: { value: string; onChange: (v: string)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const t = e.target as Node
+      if (
+        ref.current && !ref.current.contains(t) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(t))
+      ) setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -80,35 +86,37 @@ function VendorInput({ value, onChange }: { value: string; onChange: (v: string)
             if (suggestions.length > 0 || showAddNew) { computePos(); setOpen(true) }
           }}
         />
-        {open && dropdownPos && (suggestions.length > 0 || showAddNew) && (
-          <ul
-            style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
-            className="z-50 bg-white border border-slate-200 rounded shadow-lg max-h-48 overflow-y-auto text-sm"
-          >
-            {suggestions.map(s => (
-              <li
-                key={s.key}
-                className="px-3 py-1.5 cursor-pointer hover:bg-blue-50"
-                onMouseDown={() => { onChange(s.display_name); setSuggestions([]); setOpen(false) }}
-              >
-                {s.display_name}
-              </li>
-            ))}
-            {showAddNew && (
-              <li
-                className="px-3 py-1.5 cursor-pointer hover:bg-green-50 text-green-700 font-medium border-t border-slate-100"
-                onMouseDown={() => {
-                  setModalInitialName(value.trim())
-                  setShowModal(true)
-                  setOpen(false)
-                }}
-              >
-                ＋ Add "{value.trim()}"
-              </li>
-            )}
-          </ul>
-        )}
       </div>
+      {open && dropdownPos && (suggestions.length > 0 || showAddNew) && createPortal(
+        <ul
+          ref={dropdownRef}
+          style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
+          className="z-[9999] bg-white border border-slate-200 rounded shadow-lg max-h-48 overflow-y-auto text-sm"
+        >
+          {suggestions.map(s => (
+            <li
+              key={s.key}
+              className="px-3 py-1.5 cursor-pointer hover:bg-blue-50"
+              onMouseDown={() => { onChange(s.display_name); setSuggestions([]); setOpen(false) }}
+            >
+              {s.display_name}
+            </li>
+          ))}
+          {showAddNew && (
+            <li
+              className="px-3 py-1.5 cursor-pointer hover:bg-green-50 text-green-700 font-medium border-t border-slate-100"
+              onMouseDown={() => {
+                setModalInitialName(value.trim())
+                setShowModal(true)
+                setOpen(false)
+              }}
+            >
+              ＋ Add "{value.trim()}"
+            </li>
+          )}
+        </ul>,
+        document.body
+      )}
       {showModal && (
         <CreateVendorModal
           initialName={modalInitialName}
