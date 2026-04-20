@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
@@ -49,6 +49,22 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="GnuCash Bill Processor", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log every HTTP request and its response status + elapsed time."""
+    start = time.perf_counter()
+    logger.debug(f"→ {request.method} {request.url.path}")
+    response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    if response.status_code >= 500:
+        logger.error(f"← {request.method} {request.url.path} {response.status_code} ({elapsed_ms:.0f}ms)")
+    elif response.status_code >= 400:
+        logger.warning(f"← {request.method} {request.url.path} {response.status_code} ({elapsed_ms:.0f}ms)")
+    else:
+        logger.debug(f"← {request.method} {request.url.path} {response.status_code} ({elapsed_ms:.0f}ms)")
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +141,7 @@ def _process_one_bill(bill: dict) -> dict:
             "ok": False,
             "error": "No expense account configured — set one in Processing Accounts settings",
         }
+    logger.info(f"Processing bill: {bill['vendor_name']} ${bill['amount']} on {bill['date']}")
     try:
         bill_guid = gnucash_db.create_bill(
             vendor_guid=vendor["gnucash_guid"],
@@ -144,8 +161,10 @@ def _process_one_bill(bill: dict) -> dict:
             checking_account_guid=checking_guid,
             check_number=bill.get("check_number", ""),
         )
+        logger.info(f"Bill posted: {bill['vendor_name']} ${bill['amount']}")
         return {"ok": True}
     except Exception as exc:
+        logger.exception(f"Bill processing failed for '{bill['vendor_name']}': {exc}")
         return {"ok": False, "error": str(exc)}
 
 
@@ -345,6 +364,7 @@ def post_one_bill(index: int):
 @app.post("/api/bills/post-all")
 def post_all_bills():
     queue = queue_io.read_queue()
+    logger.info(f"Post-all: processing {len(queue)} bills")
     succeeded = []
     failed = []
     for bill in sorted(queue, key=lambda b: b["_index"], reverse=True):
@@ -354,6 +374,9 @@ def post_all_bills():
             succeeded.append(bill["vendor_name"])
         else:
             failed.append({"vendor_name": bill["vendor_name"], "error": result["error"]})
+    logger.info(f"Post-all complete: {len(succeeded)} succeeded, {len(failed)} failed")
+    for f in failed:
+        logger.warning(f"Bill failed: {f['vendor_name']} — {f['error']}")
     return {"ok": len(failed) == 0, "succeeded": succeeded, "failed": failed}
 
 
@@ -566,6 +589,8 @@ def cash_submit(body: CashSubmitIn):
     except ValueError:
         entry_date = date.today()
 
+    total_requested = sum(e.amount for e in body.entries)
+    logger.info(f"Cash submit: {len(body.entries)} items, date={entry_date}, total=${total_requested:.2f}")
     result = {}
     try:
         line_items = [
@@ -580,8 +605,10 @@ def cash_submit(body: CashSubmitIn):
             if item["memo"].strip():
                 cash_io.save_memo_to_history(item["memo"])
         total = sum(item["amount"] for item in line_items)
+        logger.info(f"Cash entry posted: {len(line_items)} items, total=${total:.2f}, guid={batch_guid[:8]}")
         result["batch"] = {"ok": True, "guid": batch_guid, "total": total}
     except Exception as e:
+        logger.exception(f"Cash entry failed (date={body.entry_date}, items={len(body.entries)}): {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
     if body.deposit_account_guid and body.deposit_amount:
@@ -611,8 +638,10 @@ def cash_deposit(body: DepositIn):
             bank_account_guid=body.account_guid,
             amount=body.amount,
         )
+        logger.info(f"Cash deposit posted: ${body.amount:.2f} on {entry_date}, guid={guid[:8]}")
         return {"ok": True, "guid": guid}
     except Exception as e:
+        logger.exception(f"Cash deposit failed (amount=${body.amount}, date={body.entry_date}): {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
