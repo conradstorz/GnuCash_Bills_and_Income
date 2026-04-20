@@ -114,6 +114,33 @@ export default function Settings() {
             onBlur={e => mutation.mutate({ cash_on_hand_account_name: e.target.value })}
           />
         </Field>
+        <Field label="Income / Asset Accounts Available for Cash Deposits">
+          {allAccounts.length === 0 ? (
+            <p className="text-xs text-slate-400 italic">No accounts found — is the database connected?</p>
+          ) : (
+            <div className="border border-slate-200 rounded p-2 max-h-48 overflow-y-auto space-y-1">
+              {allAccounts.map((a: Account) => {
+                const checked = settings.enabled_cash_account_guids.includes(a.guid)
+                return (
+                  <label key={a.guid} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer hover:bg-slate-50 px-1 rounded">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-blue-600"
+                      checked={checked}
+                      onChange={e => {
+                        const next = e.target.checked
+                          ? [...settings.enabled_cash_account_guids, a.guid]
+                          : settings.enabled_cash_account_guids.filter(g => g !== a.guid)
+                        mutation.mutate({ enabled_cash_account_guids: next })
+                      }}
+                    />
+                    {a.name}
+                  </label>
+                )
+              })}
+            </div>
+          )}
+        </Field>
       </Section>
 
       <Section title="Locality">
