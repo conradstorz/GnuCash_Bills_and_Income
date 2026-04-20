@@ -568,19 +568,18 @@ def cash_submit(body: CashSubmitIn):
 
     result = {}
     try:
-        account_guids = [e.account_guid for e in body.entries]
-        memos = [e.memo for e in body.entries]
-        amounts = [e.amount for e in body.entries]
+        line_items = [
+            {"account_guid": e.account_guid, "memo": e.memo, "amount": e.amount}
+            for e in body.entries
+        ]
         batch_guid = gnucash_db.create_cash_entry(
             entry_date=entry_date,
-            account_guids=account_guids,
-            memos=memos,
-            amounts=amounts,
+            line_items=line_items,
         )
-        for memo in memos:
-            if memo.strip():
-                cash_io.save_memo_to_history(memo)
-        total = sum(amounts)
+        for item in line_items:
+            if item["memo"].strip():
+                cash_io.save_memo_to_history(item["memo"])
+        total = sum(item["amount"] for item in line_items)
         result["batch"] = {"ok": True, "guid": batch_guid, "total": total}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

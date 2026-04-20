@@ -60,9 +60,27 @@ function AutocompleteInput({
   )
 }
 
+const STORAGE_KEY = 'cashEntry_draft'
+
+function loadDraft(): { entryDate: string; rows: Row[] } | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function saveDraft(entryDate: string, rows: Row[]) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ entryDate, rows })) } catch {}
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(STORAGE_KEY) } catch {}
+}
+
 export default function CashEntry() {
-  const [entryDate, setEntryDate] = useState(today())
-  const [rows, setRows] = useState<Row[]>([newRow()])
+  const draft = loadDraft()
+  const [entryDate, setEntryDate] = useState(draft?.entryDate ?? today())
+  const [rows, setRows] = useState<Row[]>(draft?.rows ?? [newRow()])
   const [memoSuggestions, setMemoSuggestions] = useState<string[]>([])
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -71,12 +89,24 @@ export default function CashEntry() {
   const { data: accounts = [] } = useQuery({ queryKey: ['cashAccounts'], queryFn: getCashAccounts })
 
   const updateRow = (id: number, field: keyof Row, value: string) =>
-    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
+    setRows(prev => {
+      const next = prev.map(r => r.id === id ? { ...r, [field]: value } : r)
+      saveDraft(entryDate, next)
+      return next
+    })
 
   const removeRow = (id: number) =>
-    setRows(prev => prev.filter(r => r.id !== id))
+    setRows(prev => {
+      const next = prev.filter(r => r.id !== id)
+      saveDraft(entryDate, next)
+      return next
+    })
 
-  const addRow = () => setRows(prev => [...prev, newRow()])
+  const addRow = () => setRows(prev => {
+    const next = [...prev, newRow()]
+    saveDraft(entryDate, next)
+    return next
+  })
 
   const fetchMemos = async (q: string) => {
     const data = await getMemos(q)
@@ -98,12 +128,15 @@ export default function CashEntry() {
       const res = await submitCash({ entry_date: entryDate, entries })
       if (res.batch?.ok) {
         setResult(`Posted $${res.batch.total.toFixed(2)} to GnuCash.`)
+        clearDraft()
         setRows([newRow()])
       } else {
         setError(res.batch?.error || 'Unknown error')
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Server error'
+      // Prefer the server's error detail over the generic axios message
+      const axiosDetail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      const msg = axiosDetail ?? (e instanceof Error ? e.message : 'Server error')
       setError(msg)
     } finally {
       setSubmitting(false)
@@ -116,7 +149,7 @@ export default function CashEntry() {
         <h1 className="text-xl font-semibold text-slate-800">Cash Entry</h1>
         <div className="flex items-center gap-3">
           <label className="text-sm text-slate-500">Date</label>
-          <Input type="date" className="h-8 w-36 text-sm" value={entryDate} onChange={e => setEntryDate(e.target.value)} />
+          <Input type="date" className="h-8 w-36 text-sm" value={entryDate} onChange={e => { setEntryDate(e.target.value); saveDraft(e.target.value, rows) }} />
           <Button onClick={handleSubmit} disabled={submitting} className="bg-green-600 hover:bg-green-700">
             {submitting ? 'Posting...' : 'Post to GnuCash'}
           </Button>
