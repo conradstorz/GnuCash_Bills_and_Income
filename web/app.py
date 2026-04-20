@@ -706,10 +706,12 @@ def spa_fallback(full_path: str):
     candidate = FRONTEND_DIST / full_path
     if candidate.exists() and candidate.is_file():
         return FileResponse(str(candidate))
-    # Fall back to index.html for all other paths (React Router handles routing)
+    # Fall back to index.html for all other paths (React Router handles routing).
+    # no-cache forces the browser to revalidate index.html on every load so it
+    # always fetches the latest content-hashed JS/CSS bundle after a rebuild.
     index = FRONTEND_DIST / "index.html"
     if index.exists():
-        return FileResponse(str(index))
+        return FileResponse(str(index), headers={"Cache-Control": "no-cache"})
     return JSONResponse(
         {"error": "Frontend not built. Run: cd frontend && npm run build"},
         status_code=503,
