@@ -87,6 +87,60 @@ class TestCashSubmit:
         assert data["deposit"]["ok"] is True
 
 
+class TestCashDeposit:
+    def test_success_returns_ok_and_guid(self):
+        with patch("bill_processor.gnucash_db.create_cash_deposit", return_value="y" * 32):
+            response = client.post("/api/cash/deposit", json={
+                "account_guid": "b" * 32,
+                "amount": 150.0,
+                "entry_date": "2026-04-01",
+                "memo": "Saturday deposit",
+            })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ok"] is True
+        assert data["guid"] == "y" * 32
+
+    def test_db_error_returns_500(self):
+        with patch("bill_processor.gnucash_db.create_cash_deposit",
+                   side_effect=RuntimeError("Database locked")):
+            response = client.post("/api/cash/deposit", json={
+                "account_guid": "b" * 32,
+                "amount": 75.0,
+                "entry_date": "2026-04-01",
+            })
+        assert response.status_code == 500
+        assert "locked" in response.json()["detail"].lower()
+
+    def test_invalid_date_defaults_to_today_and_succeeds(self):
+        with patch("bill_processor.gnucash_db.create_cash_deposit", return_value="y" * 32):
+            response = client.post("/api/cash/deposit", json={
+                "account_guid": "b" * 32,
+                "amount": 50.0,
+                "entry_date": "not-a-date",
+            })
+        assert response.status_code == 200
+        assert response.json()["ok"] is True
+
+    def test_passes_correct_kwargs_to_db(self):
+        from datetime import date
+        captured = {}
+
+        def capture(**kw):
+            captured.update(kw)
+            return "y" * 32
+
+        with patch("bill_processor.gnucash_db.create_cash_deposit", side_effect=capture):
+            client.post("/api/cash/deposit", json={
+                "account_guid": "b" * 32,
+                "amount": 99.50,
+                "entry_date": "2026-04-15",
+            })
+        assert captured["bank_account_guid"] == "b" * 32
+        assert captured["amount"] == 99.50
+        assert captured["deposit_date"] == date(2026, 4, 15)
+
+
 class TestAddressLookup:
     def test_returns_candidates_and_message(self, monkeypatch):
         import bill_processor.web.app as web_app

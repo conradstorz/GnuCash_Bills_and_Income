@@ -507,3 +507,270 @@ class TestVendorSearchCandidates:
         response = client.get("/api/vendors/search-candidates?name=Unknown+Vendor")
         assert response.status_code == 200
         assert response.json() == {"candidates": []}
+
+
+# ---------------------------------------------------------------------------
+# Accounts routes
+# ---------------------------------------------------------------------------
+
+class TestGetAllAccounts:
+    ACCOUNTS = [
+        {"name": "Cash in Wallet", "guid": "a" * 32},
+        {"name": "Savings", "guid": "b" * 32},
+    ]
+
+    def test_returns_accounts_list(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_cash_accounts", lambda: self.ACCOUNTS)
+        response = client.get("/api/accounts")
+        assert response.status_code == 200
+        assert response.json() == self.ACCOUNTS
+
+    def test_returns_empty_list_when_no_accounts(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_cash_accounts", lambda: [])
+        response = client.get("/api/accounts")
+        assert response.status_code == 200
+        assert response.json() == []
+
+
+class TestGetCashAccounts:
+    ACCOUNTS = [
+        {"name": "Cash in Wallet", "guid": "a" * 32},
+        {"name": "Savings", "guid": "b" * 32},
+    ]
+
+    def test_returns_enabled_subset(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_cash_accounts", lambda: self.ACCOUNTS)
+        monkeypatch.setitem(
+            web_app.settings._settings,
+            "enabled_cash_account_guids",
+            ["a" * 32],
+        )
+        response = client.get("/api/accounts/cash")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["guid"] == "a" * 32
+
+    def test_returns_all_when_no_filter_configured(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_cash_accounts", lambda: self.ACCOUNTS)
+        monkeypatch.setitem(web_app.settings._settings, "enabled_cash_account_guids", [])
+        response = client.get("/api/accounts/cash")
+        assert response.status_code == 200
+        assert len(response.json()) == 2
+
+
+class TestValidateAccount:
+    ACCOUNTS = [
+        {"name": "Cash in Wallet", "guid": "a" * 32},
+        {"name": "Savings", "guid": "b" * 32},
+    ]
+
+    def test_valid_account_name_returns_true_and_guid(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_cash_accounts", lambda: self.ACCOUNTS)
+        response = client.get("/api/accounts/validate?name=Cash+in+Wallet")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["valid"] is True
+        assert data["guid"] == "a" * 32
+
+    def test_case_insensitive_match(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_cash_accounts", lambda: self.ACCOUNTS)
+        response = client.get("/api/accounts/validate?name=cash+in+wallet")
+        assert response.status_code == 200
+        assert response.json()["valid"] is True
+
+    def test_unknown_account_returns_false_and_null_guid(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_cash_accounts", lambda: self.ACCOUNTS)
+        response = client.get("/api/accounts/validate?name=Nonexistent")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["valid"] is False
+        assert data["guid"] is None
+
+    def test_empty_name_returns_false(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        monkeypatch.setattr(web_app.gnucash_db, "get_cash_accounts", lambda: self.ACCOUNTS)
+        response = client.get("/api/accounts/validate")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["valid"] is False
+        assert data["guid"] is None
+
+
+# ---------------------------------------------------------------------------
+# Vendor fuzzy search route
+# ---------------------------------------------------------------------------
+
+class TestVendorSearch:
+    VENDORS = {
+        "acme_electric": {"display_name": "Acme Electric"},
+        "bob_plumbing": {"display_name": "Bob Plumbing"},
+    }
+
+    def _mock_vm(self, monkeypatch):
+        from bill_processor.web import app as web_app
+        mock_vm = MagicMock()
+        mock_vm.vendors = {"vendors": self.VENDORS}
+        monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
+        return mock_vm
+
+    def test_empty_query_returns_empty_results(self, client, monkeypatch):
+        self._mock_vm(monkeypatch)
+        response = client.get("/api/vendors/search")
+        assert response.status_code == 200
+        assert response.json() == {"results": []}
+
+    def test_whitespace_only_query_returns_empty_results(self, client, monkeypatch):
+        self._mock_vm(monkeypatch)
+        response = client.get("/api/vendors/search?q=+++")
+        assert response.status_code == 200
+        assert response.json() == {"results": []}
+
+    def test_matching_query_returns_results(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        self._mock_vm(monkeypatch)
+        # fuzzy_match_vendor is a module-level import; patch it
+        monkeypatch.setattr(
+            web_app,
+            "fuzzy_match_vendor",
+            lambda q, vendors, threshold: (
+                "acme_electric",
+                95,
+                [("acme_electric", 95)],
+            ),
+        )
+        response = client.get("/api/vendors/search?q=Acme")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["results"]) >= 1
+        keys = [r["key"] for r in data["results"]]
+        assert "acme_electric" in keys
+
+    def test_no_match_returns_empty_results(self, client, monkeypatch):
+        from bill_processor.web import app as web_app
+        self._mock_vm(monkeypatch)
+        monkeypatch.setattr(
+            web_app,
+            "fuzzy_match_vendor",
+            lambda q, vendors, threshold: (None, 0, []),
+        )
+        response = client.get("/api/vendors/search?q=zzzzunknown")
+        assert response.status_code == 200
+        assert response.json() == {"results": []}
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/vendors/{key}
+# ---------------------------------------------------------------------------
+
+class TestUpdateVendor:
+    BASE_VENDORS = {
+        "vendors": {
+            "acme_electric": {
+                "display_name": "Acme Electric",
+                "gnucash_guid": "g" * 32,
+                "addr_line1": "1 Main St",
+                "addr_city": "Cincinnati",
+                "addr_state": "OH",
+                "addr_zip": "45200",
+            }
+        },
+        "aliases": {},
+    }
+
+    def _mock_vm(self, monkeypatch, vendors=None):
+        import copy
+        from bill_processor.web import app as web_app
+        mock_vm = MagicMock()
+        mock_vm.vendors = copy.deepcopy(vendors or self.BASE_VENDORS)
+        mock_vm.save = MagicMock()
+        monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
+        return mock_vm
+
+    def test_update_display_name_succeeds(self, client, monkeypatch):
+        mock_vm = self._mock_vm(monkeypatch)
+        response = client.put("/api/vendors/acme_electric", json={"display_name": "ACME Electric LLC"})
+        assert response.status_code == 200
+        assert response.json()["ok"] is True
+        mock_vm.save.assert_called_once()
+        assert mock_vm.vendors["vendors"]["acme_electric"]["display_name"] == "ACME Electric LLC"
+
+    def test_unknown_key_returns_404(self, client, monkeypatch):
+        self._mock_vm(monkeypatch)
+        response = client.put("/api/vendors/no_such_vendor", json={"display_name": "X"})
+        assert response.status_code == 404
+
+    def test_update_address_fields(self, client, monkeypatch):
+        mock_vm = self._mock_vm(monkeypatch)
+        response = client.put("/api/vendors/acme_electric", json={
+            "addr_line1": "99 Oak Ave",
+            "addr_city": "Dayton",
+            "addr_state": "OH",
+            "addr_zip": "45400",
+        })
+        assert response.status_code == 200
+        v = mock_vm.vendors["vendors"]["acme_electric"]
+        assert v["addr_line1"] == "99 Oak Ave"
+        assert v["addr_city"] == "Dayton"
+        assert v["addr_zip"] == "45400"
+
+    def test_update_aliases_replaces_existing(self, client, monkeypatch):
+        import copy
+        vendors = copy.deepcopy(self.BASE_VENDORS)
+        vendors["aliases"] = {"old_alias": "acme_electric"}
+        mock_vm = self._mock_vm(monkeypatch, vendors=vendors)
+        response = client.put("/api/vendors/acme_electric", json={"aliases": ["new_alias"]})
+        assert response.status_code == 200
+        aliases = mock_vm.vendors["aliases"]
+        assert "old_alias" not in aliases
+        assert aliases.get("new_alias") == "acme_electric"
+
+
+# ---------------------------------------------------------------------------
+# POST /api/vendors/sync-all
+# ---------------------------------------------------------------------------
+
+class TestVendorSyncAll:
+    def _mock_sync(self, monkeypatch, *, discover_ok=True, raises=None):
+        from bill_processor.web import app as web_app
+        mock_sync = MagicMock()
+        mock_sync.discover_schema.return_value = discover_ok
+        if raises:
+            mock_sync.discover_schema.side_effect = raises
+        mock_sync.sync_gnucash_to_json.return_value = None
+        monkeypatch.setattr(web_app, "VendorSyncUtility", lambda: mock_sync)
+        return mock_sync
+
+    def test_success_returns_ok(self, client, monkeypatch):
+        self._mock_sync(monkeypatch)
+        response = client.post("/api/vendors/sync-all")
+        assert response.status_code == 200
+        assert response.json() == {"ok": True}
+
+    def test_schema_discovery_failure_returns_error(self, client, monkeypatch):
+        self._mock_sync(monkeypatch, discover_ok=False)
+        response = client.post("/api/vendors/sync-all")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ok"] is False
+        assert "schema" in data["error"].lower()
+
+    def test_exception_returns_error_message(self, client, monkeypatch):
+        self._mock_sync(monkeypatch, raises=RuntimeError("Connection failed"))
+        response = client.post("/api/vendors/sync-all")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ok"] is False
+        assert "Connection failed" in data["error"]
+
+    def test_sync_gnucash_to_json_called_on_success(self, client, monkeypatch):
+        mock_sync = self._mock_sync(monkeypatch)
+        client.post("/api/vendors/sync-all")
+        mock_sync.sync_gnucash_to_json.assert_called_once()
