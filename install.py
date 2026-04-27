@@ -180,40 +180,78 @@ def generate_launcher(project_root: Path) -> Path:
     logger.debug(f"Generating launcher for platform: {sys.platform}")
     if sys.platform == "win32":
         launcher_path = project_root / "GnuCash Bills.bat"
+        log_path = project_root / "logs" / "launcher.log"
         content = (
             "@echo off\n"
+            "setlocal enabledelayedexpansion\n"
             "title GnuCash Bills - Starting...\n"
+            "\n"
+            f'set PROJ={project_root}\n'
+            f'set LOG={log_path}\n'
+            "\n"
+            'echo. >> "%LOG%"\n'
+            'echo ============================================================ >> "%LOG%"\n'
+            'echo [%date% %time%] Launcher started >> "%LOG%"\n'
+            "\n"
+            "echo Building frontend...\n"
+            'echo [%date% %time%] Starting frontend build (npm run build)... >> "%LOG%"\n'
+            f'cd /d "{project_root}\\frontend"\n'
+            'call npm run build >> "%LOG%" 2>&1\n'
+            "set BUILD_RESULT=!errorlevel!\n"
+            'echo [%date% %time%] Frontend build finished - errorlevel: !BUILD_RESULT! >> "%LOG%"\n'
+            "if !BUILD_RESULT! neq 0 (\n"
+            "    echo ERROR: Frontend build failed.\n"
+            '    echo [%date% %time%] ERROR: Frontend build failed >> "%LOG%"\n'
+            "    pause\n"
+            "    exit /b 1\n"
+            ")\n"
+            f'cd /d "{project_root}"\n'
+            "\n"
             'echo Checking if GnuCash Bills server is already running on port 7432...\n'
-            "netstat -ano | findstr :7432 | findstr LISTENING >nul 2>&1\n"
-            "if %errorlevel% equ 0 (\n"
-            "    echo Server is already running. Opening browser...\n"
+            'echo [%date% %time%] Checking if server already running... >> "%LOG%"\n'
+            'curl -s -o nul -w "%%{http_code}" http://localhost:7432/api/status >> "%LOG%" 2>&1\n'
+            "set CURL_RESULT=!errorlevel!\n"
+            'echo  (curl errorlevel: !CURL_RESULT!) >> "%LOG%"\n'
+            "if !CURL_RESULT! equ 0 (\n"
+            "    echo Server already running - opening browser with fresh frontend.\n"
+            '    echo [%date% %time%] Server already running - opening browser >> "%LOG%"\n'
             "    start http://localhost:7432\n"
-            "    echo Done.\n"
             "    timeout /t 2 /nobreak >nul\n"
             "    exit /b 0\n"
             ")\n"
             "\n"
+            'echo [%date% %time%] Server not running - starting server... >> "%LOG%"\n'
             "echo Starting GnuCash Bills server on port 7432...\n"
-            f'start "GnuCash Bills Server" cmd /c "cd /d {project_root} && uv run uvicorn bill_processor.web.app:app --port 7432 & echo. & echo Server stopped. Closing window in 3 seconds... & timeout /t 3 /nobreak >nul"\n'
+            f'start "GnuCash Bills Server" cmd /c "cd /d {project_root} && uv run uvicorn bill_processor.web.app:app --port 7432 & echo. & echo Server stopped. Closing in 3 seconds... & timeout /t 3 /nobreak >nul"\n'
+            "\n"
             "echo Waiting for server to start...\n"
-            "timeout /t 3 /nobreak >nul\n"
+            'echo [%date% %time%] Polling for server readiness (max 30s)... >> "%LOG%"\n'
+            "set /a max_wait_seconds=30\n"
+            "set /a elapsed=0\n"
+            ":wait_loop\n"
+            'curl -s -o nul -w "%%{http_code}" http://localhost:7432/api/status >> "%LOG%" 2>&1\n'
+            "set POLL_RESULT=!errorlevel!\n"
+            'echo  poll[!elapsed!s] curl errorlevel: !POLL_RESULT! >> "%LOG%"\n'
+            "if !POLL_RESULT! equ 0 goto server_ready\n"
+            "if !elapsed! geq !max_wait_seconds! goto server_failed\n"
+            "timeout /t 1 /nobreak >nul\n"
+            "set /a elapsed+=1\n"
+            "goto wait_loop\n"
             "\n"
-            "echo Verifying server started...\n"
-            "netstat -ano | findstr :7432 | findstr LISTENING >nul 2>&1\n"
-            "if %errorlevel% neq 0 (\n"
-            "    echo ERROR: Server failed to start on port 7432.\n"
-            "    echo Check the server console window for errors.\n"
-            "    pause\n"
-            "    exit /b 1\n"
-            ")\n"
+            ":server_failed\n"
+            "echo ERROR: Server failed to start after 30 seconds.\n"
+            'echo [%date% %time%] ERROR: Server failed after !elapsed! poll attempts >> "%LOG%"\n'
+            "pause\n"
+            "exit /b 1\n"
             "\n"
+            ":server_ready\n"
             "echo Opening browser...\n"
+            'echo [%date% %time%] Server ready after !elapsed!s - opening browser >> "%LOG%"\n'
             "start http://localhost:7432\n"
             "echo.\n"
             "echo SUCCESS: Server is running in a separate console window.\n"
-            "echo Close the server console window to stop the application.\n"
-            "echo.\n"
-            "echo This window will close automatically in 20 seconds...\n"
+            'echo [%date% %time%] Launcher complete >> "%LOG%"\n'
+            "echo This window will close in 20 seconds...\n"
             "timeout /t 20 >nul\n"
         )
     else:
