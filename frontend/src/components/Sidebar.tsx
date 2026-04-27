@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import api from '../api/client'
@@ -22,7 +23,7 @@ export default function Sidebar() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [isShuttingDown, setIsShuttingDown] = useState(false)
 
-  const badges: Record<string, React.ReactNode> = {
+  const badges: Record<string, ReactNode> = {
     '/bills': status?.queued_bills
       ? <span className="ml-auto bg-amber-500 text-white text-xs font-semibold rounded-full px-1.5 py-0.5 leading-none">{status.queued_bills}</span>
       : null,
@@ -38,8 +39,18 @@ export default function Sidebar() {
     } catch {
       // Server may close before the response arrives — that's expected
     }
+    setShowConfirm(false)
     window.close()
   }
+
+  useEffect(() => {
+    if (!showConfirm) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !isShuttingDown) setShowConfirm(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [showConfirm, isShuttingDown])
 
   return (
     <>
@@ -81,12 +92,22 @@ export default function Sidebar() {
       </aside>
 
       {showConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-lg p-6 w-80 shadow-xl">
-            <h2 className="text-white font-semibold text-base mb-1">Shut down server?</h2>
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => { if (!isShuttingDown) setShowConfirm(false) }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shutdown-dialog-title"
+            className="bg-slate-800 rounded-lg p-6 w-80 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="shutdown-dialog-title" className="text-white font-semibold text-base mb-1">Shut down server?</h2>
             <p className="text-slate-400 text-sm mb-5">This will stop the server and close this tab.</p>
             <div className="flex gap-3 justify-end">
               <button
+                autoFocus
                 onClick={() => setShowConfirm(false)}
                 disabled={isShuttingDown}
                 className="px-4 py-2 rounded text-sm text-slate-300 hover:bg-slate-700 disabled:opacity-50 transition-colors"
