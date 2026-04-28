@@ -215,7 +215,7 @@ function EditableRow({
       else amountRef.current?.focus()
       return
     }
-    setErrors({})
+    if (Object.keys(errors).length > 0) setErrors({})
     onSave({ vendor_name: vendor, amount: amt, memo, bill_date: date, check_number: check })
   }
 
@@ -228,7 +228,7 @@ function EditableRow({
           onChange={v => { setVendor(v); if (errors.vendor) setErrors(prev => ({ ...prev, vendor: undefined })) }}
           inputClassName={errors.vendor ? 'border-red-500 focus-visible:ring-red-500' : ''}
         />
-        {errors.vendor && <p className="text-xs text-red-500 mt-0.5">{errors.vendor}</p>}
+        {errors.vendor && <p role="alert" className="text-xs text-red-500 mt-0.5">{errors.vendor}</p>}
       </td>
       <td className="px-2 py-1">
         <Input
@@ -238,7 +238,7 @@ function EditableRow({
           onChange={e => { setAmount(e.target.value); if (errors.amount) setErrors(prev => ({ ...prev, amount: undefined })) }}
           placeholder="0.00"
         />
-        {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
+        {errors.amount && <p role="alert" className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
       </td>
       <td className="px-2 py-1"><Input className="h-7 text-sm" value={memo} onChange={e => setMemo(e.target.value)} placeholder="Memo" /></td>
       <td className="px-2 py-1"><Input className="h-7 text-sm" type="date" value={date} onChange={e => setDate(e.target.value)} /></td>
