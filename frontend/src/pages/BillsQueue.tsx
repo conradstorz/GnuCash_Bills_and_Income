@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getBills, addBill, updateBill, deleteBill, postBill, postAllBills, type Bill, type BillIn } from '../api/bills'
@@ -15,20 +15,24 @@ const today = () => new Date().toISOString().slice(0, 10)
 
 interface VendorMatch { key: string; display_name: string }
 
-function VendorInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+const VendorInput = forwardRef<HTMLInputElement, {
+  value: string
+  onChange: (v: string) => void
+  inputClassName?: string
+}>(function VendorInput({ value, onChange, inputClassName }, inputRef) {
   const [suggestions, setSuggestions] = useState<VendorMatch[]>([])
   const [open, setOpen] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [modalInitialName, setModalInitialName] = useState('')
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
-  const ref = useRef<HTMLDivElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLUListElement>(null)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchAbortRef = useRef<AbortController | null>(null)
 
   const computePos = () => {
-    if (ref.current) {
-      const r = ref.current.getBoundingClientRect()
+    if (wrapperRef.current) {
+      const r = wrapperRef.current.getBoundingClientRect()
       setDropdownPos({ top: r.bottom, left: r.left, width: r.width })
     }
   }
@@ -37,7 +41,7 @@ function VendorInput({ value, onChange }: { value: string; onChange: (v: string)
     const handler = (e: MouseEvent) => {
       const t = e.target as Node
       if (
-        ref.current && !ref.current.contains(t) &&
+        wrapperRef.current && !wrapperRef.current.contains(t) &&
         (!dropdownRef.current || !dropdownRef.current.contains(t))
       ) setOpen(false)
     }
@@ -75,9 +79,10 @@ function VendorInput({ value, onChange }: { value: string; onChange: (v: string)
 
   return (
     <>
-      <div ref={ref}>
+      <div ref={wrapperRef}>
         <Input
-          className="h-7 text-sm"
+          ref={inputRef}
+          className={`h-7 text-sm${inputClassName ? ' ' + inputClassName : ''}`}
           value={value}
           placeholder="Vendor"
           autoFocus
@@ -126,7 +131,7 @@ function VendorInput({ value, onChange }: { value: string; onChange: (v: string)
       )}
     </>
   )
-}
+})
 
 function BillRow({
   bill,
