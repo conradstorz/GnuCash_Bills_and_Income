@@ -2159,6 +2159,7 @@ def pay_bill(
     - A payment transaction with trans-txn-type="P" slot
     - Transaction notes slot with the memo
     - Two splits: AP (debit, linked to BILL's lot) and Checking (credit)
+    - gncOwner slots on the bill lot so check printing can find the vendor address
     
     Args:
         bill_guid: GUID of the posted bill to pay
@@ -2212,6 +2213,7 @@ def pay_bill(
     split_checking_guid = generate_guid()
     owner_frame_guid = generate_guid()
     invoice_frame_guid = generate_guid()
+    bill_owner_frame_guid = generate_guid()
     
     usd_guid = get_usd_guid()
     date_posted = format_gnucash_date(payment_date)
@@ -2316,7 +2318,25 @@ def pay_bill(
             conn.execute("""
                 UPDATE lots SET is_closed = -1 WHERE guid = ?
             """, (bill_lot_guid,))
-            
+
+            # 7. Add gncOwner slots to bill lot so check printing finds vendor address.
+            # GnuCash traverses: payment txn → AP split → bill_lot → gncOwner → vendor.
+            # The bill lot from post_bill only has gncInvoice slots; we add gncOwner here.
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, int64_val)
+                VALUES (?, 'gncOwner/owner-type', 1, 4)
+            """, (bill_owner_frame_guid,))
+
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+                VALUES (?, 'gncOwner/owner-guid', 5, ?)
+            """, (bill_owner_frame_guid, vendor_guid))
+
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+                VALUES (?, 'gncOwner', 9, ?)
+            """, (bill_lot_guid, bill_owner_frame_guid))
+
             conn.commit()
             
     except sqlite3.Error as e:
@@ -2345,13 +2365,21 @@ def pay_bill(
             
             # Verify trans-txn-type slot
             cursor = conn.execute("""
-                SELECT string_val FROM slots 
+                SELECT string_val FROM slots
                 WHERE obj_guid = ? AND name = 'trans-txn-type'
             """, (payment_txn_guid,))
             row = cursor.fetchone()
             if not row or row['string_val'] != 'P':
                 raise WriteVerificationError(f"Payment transaction missing trans-txn-type='P' slot")
-            
+
+            # Verify gncOwner slot added to bill lot (needed for check printing)
+            cursor = conn.execute("""
+                SELECT COUNT(*) as cnt FROM slots
+                WHERE obj_guid = ? AND name = 'gncOwner'
+            """, (bill_lot_guid,))
+            if cursor.fetchone()['cnt'] == 0:
+                raise WriteVerificationError(f"Bill lot {bill_lot_guid} missing gncOwner slot after payment")
+
         logger.info(f"POST-WRITE VERIFIED: Bill {bill['id']} paid successfully")
     
     return payment_txn_guid

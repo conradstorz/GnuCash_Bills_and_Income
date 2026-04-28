@@ -249,7 +249,17 @@ class TestBillWorkflow:
         txn_type_slot = cursor.fetchone()
         if txn_type_slot:
             assert txn_type_slot[0] == 'P', "Payment transaction type should be 'P'"
-        
+
+        # Verify gncOwner slot added to bill lot (required for check printing address lookup)
+        cursor.execute("""
+            SELECT s2.guid_val FROM slots s1
+            JOIN slots s2 ON s2.obj_guid = s1.guid_val AND s2.name = 'gncOwner/owner-guid'
+            WHERE s1.obj_guid = ? AND s1.name = 'gncOwner'
+        """, (lot_guid,))
+        owner_row = cursor.fetchone()
+        assert owner_row is not None, "Bill lot missing gncOwner slot after payment"
+        assert owner_row[0] == test_vendor_guid, "Bill lot gncOwner/owner-guid should match vendor"
+
         conn.close()
 
     def test_full_workflow_integration(self, db_connection, test_vendor_guid, test_accounts, bill_data):
