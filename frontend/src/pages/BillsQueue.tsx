@@ -194,17 +194,52 @@ function EditableRow({
   const [memo, setMemo] = useState(initial?.memo ?? '')
   const [date, setDate] = useState(initial?.date ?? today())
   const [check, setCheck] = useState(initial?.check_number ?? '')
+  const [errors, setErrors] = useState<{ vendor?: string; amount?: string }>({})
+  const vendorRef = useRef<HTMLInputElement>(null)
+  const amountRef = useRef<HTMLInputElement>(null)
 
   const handleSave = () => {
+    const newErrors: { vendor?: string; amount?: string } = {}
+    if (!vendor.trim()) {
+      newErrors.vendor = 'Vendor is required'
+    }
     const amt = parseFloat(amount)
-    if (!vendor.trim() || isNaN(amt) || amt <= 0) return
+    if (!amount.trim() || isNaN(amt)) {
+      newErrors.amount = 'Amount is required'
+    } else if (amt <= 0) {
+      newErrors.amount = 'Amount must be greater than 0'
+    }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      if (newErrors.vendor) vendorRef.current?.focus()
+      else amountRef.current?.focus()
+      return
+    }
+    setErrors({})
     onSave({ vendor_name: vendor, amount: amt, memo, bill_date: date, check_number: check })
   }
 
   return (
     <tr className="border-b-2 border-blue-400 bg-blue-50">
-      <td className="px-2 py-1"><VendorInput value={vendor} onChange={setVendor} /></td>
-      <td className="px-2 py-1"><Input className="h-7 text-sm text-right" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></td>
+      <td className="px-2 py-1">
+        <VendorInput
+          ref={vendorRef}
+          value={vendor}
+          onChange={v => { setVendor(v); if (errors.vendor) setErrors(prev => ({ ...prev, vendor: undefined })) }}
+          inputClassName={errors.vendor ? 'border-red-500 focus-visible:ring-red-500' : ''}
+        />
+        {errors.vendor && <p className="text-xs text-red-500 mt-0.5">{errors.vendor}</p>}
+      </td>
+      <td className="px-2 py-1">
+        <Input
+          ref={amountRef}
+          className={cn('h-7 text-sm text-right', errors.amount ? 'border-red-500 focus-visible:ring-red-500' : '')}
+          value={amount}
+          onChange={e => { setAmount(e.target.value); if (errors.amount) setErrors(prev => ({ ...prev, amount: undefined })) }}
+          placeholder="0.00"
+        />
+        {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
+      </td>
       <td className="px-2 py-1"><Input className="h-7 text-sm" value={memo} onChange={e => setMemo(e.target.value)} placeholder="Memo" /></td>
       <td className="px-2 py-1"><Input className="h-7 text-sm" type="date" value={date} onChange={e => setDate(e.target.value)} /></td>
       <td className="px-2 py-1"><Input className="h-7 text-sm" value={check} onChange={e => setCheck(e.target.value)} placeholder="Check #" /></td>
