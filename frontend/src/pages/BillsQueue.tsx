@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getBills, addBill, updateBill, deleteBill, postBill, postAllBills, type Bill, type BillIn } from '../api/bills'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import api from '@/api/client'
 import CreateVendorModal from '../components/CreateVendorModal'
 
@@ -82,7 +83,7 @@ const VendorInput = forwardRef<HTMLInputElement, {
       <div ref={wrapperRef}>
         <Input
           ref={inputRef}
-          className={`h-7 text-sm${inputClassName ? ' ' + inputClassName : ''}`}
+          className={cn('h-7 text-sm', inputClassName)}
           value={value}
           placeholder="Vendor"
           autoFocus
