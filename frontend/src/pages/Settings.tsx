@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getSettings, updateSettings, type SettingsUpdate } from '../api/settings'
-import { getAllAccounts, type Account } from '../api/accounts'
+import { getAllAccounts, getExpenseAccounts, getPayableAccounts, getBankAccounts, type Account } from '../api/accounts'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import api from '../api/client'
@@ -28,6 +28,9 @@ export default function Settings() {
   const qc = useQueryClient()
   const { data: settings, isLoading } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
   const { data: allAccounts = [] } = useQuery({ queryKey: ['allAccounts'], queryFn: getAllAccounts })
+  const { data: expenseAccounts = [] } = useQuery({ queryKey: ['expenseAccounts'], queryFn: getExpenseAccounts })
+  const { data: payableAccounts = [] } = useQuery({ queryKey: ['payableAccounts'], queryFn: getPayableAccounts })
+  const { data: bankAccounts = [] } = useQuery({ queryKey: ['bankAccounts'], queryFn: getBankAccounts })
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -75,7 +78,7 @@ export default function Settings() {
             onChange={e => mutation.mutate({ ap_account_guid: e.target.value || undefined })}
           >
             <option value="">— not set —</option>
-            {allAccounts.map((a: Account) => (
+            {payableAccounts.map((a: Account) => (
               <option key={a.guid} value={a.guid}>{a.name}</option>
             ))}
           </select>
@@ -87,7 +90,7 @@ export default function Settings() {
             onChange={e => mutation.mutate({ checking_account_guid: e.target.value || undefined })}
           >
             <option value="">— not set —</option>
-            {allAccounts.map((a: Account) => (
+            {bankAccounts.map((a: Account) => (
               <option key={a.guid} value={a.guid}>{a.name}</option>
             ))}
           </select>
@@ -99,7 +102,7 @@ export default function Settings() {
             onChange={e => mutation.mutate({ expense_account_guid: e.target.value || undefined })}
           >
             <option value="">— not set —</option>
-            {allAccounts.map((a: Account) => (
+            {expenseAccounts.map((a: Account) => (
               <option key={a.guid} value={a.guid}>{a.name}</option>
             ))}
           </select>

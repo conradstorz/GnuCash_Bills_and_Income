@@ -260,6 +260,17 @@ class TestBillWorkflow:
         assert owner_row is not None, "Bill lot missing gncOwner slot after payment"
         assert owner_row[0] == test_vendor_guid, "Bill lot gncOwner/owner-guid should match vendor"
 
+        # Verify gncOwner slot added to payment transaction (required for check printing)
+        # GnuCash check dialog resolves vendor address via gncOwner on the transaction itself
+        cursor.execute("""
+            SELECT s2.guid_val FROM slots s1
+            JOIN slots s2 ON s2.obj_guid = s1.guid_val AND s2.name = 'gncOwner/owner-guid'
+            WHERE s1.obj_guid = ? AND s1.name = 'gncOwner'
+        """, (payment_txn_guid,))
+        txn_owner_row = cursor.fetchone()
+        assert txn_owner_row is not None, "Payment transaction missing gncOwner slot (needed for check printing)"
+        assert txn_owner_row[0] == test_vendor_guid, "Payment transaction gncOwner/owner-guid should match vendor"
+
         conn.close()
 
     def test_full_workflow_integration(self, db_connection, test_vendor_guid, test_accounts, bill_data):
@@ -621,6 +632,186 @@ class TestBillWorkflow:
         conn.close()
         assert row is not None
         assert row[0] == "1042"
+
+
+class TestWorkflowAccountTypeIntegrity:
+    """
+    Verify that every account used in the 3-step workflow has the correct
+    GnuCash account_type in the database.
+
+    These tests catch the class of misconfiguration where an INCOME or EXPENSE
+    account GUID is stored as the AP account.  Such a misconfiguration produces
+    no runtime errors but silently breaks GnuCash check-printing because GnuCash
+    only resolves the vendor address via a PAYABLE-type account.
+    """
+
+    def _run_full_workflow(self, test_vendor_guid, test_accounts, bill_data):
+        """Run create -> post -> pay and return (bill_guid, lot_guid, payment_txn_guid)."""
+        bill_guid = gnucash_db.create_bill(
+            vendor_guid=test_vendor_guid,
+            expense_account_guid=test_accounts['expense_account'],
+            amount=bill_data['amount'],
+            memo=bill_data['memo'],
+            bill_date=bill_data['date'],
+        )
+        lot_guid = gnucash_db.post_bill(
+            bill_guid=bill_guid,
+            post_date=bill_data['date'],
+            ap_account_guid=test_accounts['ap_account'],
+        )
+        payment_txn_guid = gnucash_db.pay_bill(
+            bill_guid=bill_guid,
+            payment_date=bill_data['date'],
+            checking_account_guid=test_accounts['checking_account'],
+            memo=bill_data['memo'],
+        )
+        return bill_guid, lot_guid, payment_txn_guid
+
+    def test_lot_is_linked_to_payable_account(
+        self, db_connection, test_vendor_guid, test_accounts, bill_data
+    ):
+        """post_bill() must create the lot under a PAYABLE account, not INCOME/EXPENSE."""
+        _, lot_guid, _ = self._run_full_workflow(test_vendor_guid, test_accounts, bill_data)
+
+        conn = sqlite3.connect(str(db_connection))
+        row = conn.execute(
+            "SELECT a.account_type FROM lots l "
+            "JOIN accounts a ON a.guid = l.account_guid WHERE l.guid = ?",
+            (lot_guid,),
+        ).fetchone()
+        conn.close()
+
+        assert row is not None, "Lot not found in database"
+        assert row[0] == 'PAYABLE', (
+            f"Lot account_type is '{row[0]}' — should be 'PAYABLE'. "
+            "ap_account_guid in settings is pointing to the wrong account."
+        )
+
+    def test_posting_transaction_ap_split_uses_payable_account(
+        self, db_connection, test_vendor_guid, test_accounts, bill_data
+    ):
+        """Step 2 (post_bill): the AP (credit) split must be in a PAYABLE account."""
+        bill_guid, _, _ = self._run_full_workflow(test_vendor_guid, test_accounts, bill_data)
+
+        conn = sqlite3.connect(str(db_connection))
+        post_txn_guid = conn.execute(
+            "SELECT post_txn FROM invoices WHERE guid = ?", (bill_guid,)
+        ).fetchone()[0]
+        row = conn.execute(
+            "SELECT a.account_type FROM splits sp "
+            "JOIN accounts a ON a.guid = sp.account_guid "
+            "WHERE sp.tx_guid = ? AND sp.value_num < 0",
+            (post_txn_guid,),
+        ).fetchone()
+        conn.close()
+
+        assert row is not None, "AP (credit) split not found in posting transaction"
+        assert row[0] == 'PAYABLE', (
+            f"Posting transaction AP split account_type is '{row[0]}' — should be 'PAYABLE'. "
+            "The ap_account_guid setting is pointing to the wrong account."
+        )
+
+    def test_posting_transaction_expense_split_uses_expense_account(
+        self, db_connection, test_vendor_guid, test_accounts, bill_data
+    ):
+        """Step 2 (post_bill): the expense (debit) split must be in an EXPENSE account.
+
+        The expense account is e.g. 'Commissions Paid'.  It must be type EXPENSE.
+        """
+        bill_guid, _, _ = self._run_full_workflow(test_vendor_guid, test_accounts, bill_data)
+
+        conn = sqlite3.connect(str(db_connection))
+        post_txn_guid = conn.execute(
+            "SELECT post_txn FROM invoices WHERE guid = ?", (bill_guid,)
+        ).fetchone()[0]
+        row = conn.execute(
+            "SELECT a.account_type, a.name FROM splits sp "
+            "JOIN accounts a ON a.guid = sp.account_guid "
+            "WHERE sp.tx_guid = ? AND sp.value_num > 0",
+            (post_txn_guid,),
+        ).fetchone()
+        conn.close()
+
+        assert row is not None, "Expense (debit) split not found in posting transaction"
+        assert row[0] == 'EXPENSE', (
+            f"Posting transaction expense split uses account '{row[1]}' (type='{row[0]}') "
+            "— should be 'EXPENSE'. "
+            "The expense_account_guid (e.g. Commissions Paid) setting is pointing to the wrong account."
+        )
+
+    def test_payment_transaction_ap_split_uses_payable_account(
+        self, db_connection, test_vendor_guid, test_accounts, bill_data
+    ):
+        """Step 3 (pay_bill): the AP (debit) split must be in a PAYABLE account.
+
+        This is the most critical check for check printing.  GnuCash resolves
+        the vendor address by walking the AP split to its PAYABLE account.
+        If the account type is INCOME or EXPENSE, the vendor address is blank.
+        pay_bill() derives this account from invoice.post_acc, so a wrong
+        ap_account_guid in post_bill() cascades here automatically.
+        """
+        _, _, payment_txn_guid = self._run_full_workflow(test_vendor_guid, test_accounts, bill_data)
+
+        conn = sqlite3.connect(str(db_connection))
+        row = conn.execute(
+            "SELECT a.account_type, a.name FROM splits sp "
+            "JOIN accounts a ON a.guid = sp.account_guid "
+            "WHERE sp.tx_guid = ? AND sp.value_num > 0",
+            (payment_txn_guid,),
+        ).fetchone()
+        conn.close()
+
+        assert row is not None, "AP (debit) split not found in payment transaction"
+        assert row[0] == 'PAYABLE', (
+            f"Payment transaction AP split uses account '{row[1]}' (type='{row[0]}') "
+            "— should be 'PAYABLE'. "
+            "GnuCash check printing will show a blank vendor address if this is not PAYABLE."
+        )
+
+    def test_payment_transaction_checking_split_uses_bank_account(
+        self, db_connection, test_vendor_guid, test_accounts, bill_data
+    ):
+        """Step 3 (pay_bill): the checking (credit) split must be in a BANK account."""
+        _, _, payment_txn_guid = self._run_full_workflow(test_vendor_guid, test_accounts, bill_data)
+
+        conn = sqlite3.connect(str(db_connection))
+        row = conn.execute(
+            "SELECT a.account_type, a.name FROM splits sp "
+            "JOIN accounts a ON a.guid = sp.account_guid "
+            "WHERE sp.tx_guid = ? AND sp.value_num < 0",
+            (payment_txn_guid,),
+        ).fetchone()
+        conn.close()
+
+        assert row is not None, "Checking (credit) split not found in payment transaction"
+        assert row[0] == 'BANK', (
+            f"Payment checking split uses account '{row[1]}' (type='{row[0]}') — should be 'BANK'."
+        )
+
+    def test_invoice_post_acc_is_payable_account(
+        self, db_connection, test_vendor_guid, test_accounts, bill_data
+    ):
+        """invoices.post_acc must reference a PAYABLE account.
+
+        pay_bill() reads the AP account from invoice.post_acc — if that field
+        was written with an INCOME account GUID, the payment will be
+        miscategorised and check printing will not find the vendor address.
+        """
+        bill_guid, _, _ = self._run_full_workflow(test_vendor_guid, test_accounts, bill_data)
+
+        conn = sqlite3.connect(str(db_connection))
+        row = conn.execute(
+            "SELECT a.account_type, a.name FROM invoices i "
+            "JOIN accounts a ON a.guid = i.post_acc WHERE i.guid = ?",
+            (bill_guid,),
+        ).fetchone()
+        conn.close()
+
+        assert row is not None, "Invoice post_acc account not found"
+        assert row[0] == 'PAYABLE', (
+            f"Invoice post_acc references account '{row[1]}' (type='{row[0]}') "
+            "— should be 'PAYABLE'."
+        )
 
 
 if __name__ == "__main__":

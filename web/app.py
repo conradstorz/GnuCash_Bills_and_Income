@@ -570,6 +570,21 @@ def validate_account(name: str = ""):
     return {"valid": match is not None, "guid": match["guid"] if match else None}
 
 
+@app.get("/api/accounts/expense")
+def get_expense_accounts():
+    return gnucash_db.get_accounts_by_type("EXPENSE")
+
+
+@app.get("/api/accounts/payable")
+def get_payable_accounts():
+    return gnucash_db.get_accounts_by_type("PAYABLE")
+
+
+@app.get("/api/accounts/bank")
+def get_bank_accounts():
+    return gnucash_db.get_accounts_by_type("BANK")
+
+
 @app.get("/api/memos")
 def get_memos(q: str = ""):
     suggestions = cash_io.get_memo_suggestions(q)

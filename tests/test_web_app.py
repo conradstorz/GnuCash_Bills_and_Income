@@ -337,6 +337,69 @@ class TestProcessOneBill:
         assert result["ok"] is False
         assert "Processing accounts not configured" in result["error"]
 
+    def test_all_three_steps_called_in_order(self, monkeypatch):
+        """_process_one_bill() must invoke create_bill, post_bill, AND pay_bill in that order."""
+        from bill_processor.web import app as web_app
+        mock_vm = MagicMock()
+        mock_vm.find_vendor.return_value = (self._good_vendor(), "exact")
+        monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
+        self._patch_gnucash(monkeypatch, web_app)
+        call_order = []
+        monkeypatch.setattr(web_app.gnucash_db, "create_bill",
+                            lambda **kw: (call_order.append("create_bill"), self.BILL_GUID)[1])
+        monkeypatch.setattr(web_app.gnucash_db, "post_bill",
+                            lambda **kw: call_order.append("post_bill"))
+        monkeypatch.setattr(web_app.gnucash_db, "pay_bill",
+                            lambda **kw: (call_order.append("pay_bill"), "pay_guid")[1])
+        result = web_app._process_one_bill(self._bill())
+        assert result["ok"] is True
+        assert call_order == ["create_bill", "post_bill", "pay_bill"], (
+            f"Expected create->post->pay order, got: {call_order}"
+        )
+
+    def test_create_bill_receives_expense_account_from_settings(self, monkeypatch):
+        """create_bill() must receive the expense_account_guid from settings."""
+        from bill_processor.web import app as web_app
+        mock_vm = MagicMock()
+        mock_vm.find_vendor.return_value = (self._good_vendor(), "exact")
+        monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
+        self._patch_gnucash(monkeypatch, web_app)
+        captured = {}
+        monkeypatch.setattr(web_app.gnucash_db, "create_bill",
+                            lambda **kw: (captured.update(kw), self.BILL_GUID)[1])
+        web_app._process_one_bill(self._bill())
+        assert captured.get("expense_account_guid") == self.EXPENSE_GUID
+
+    def test_post_bill_receives_bill_guid_from_create_bill(self, monkeypatch):
+        """post_bill() must receive the bill_guid returned by create_bill()."""
+        from bill_processor.web import app as web_app
+        mock_vm = MagicMock()
+        mock_vm.find_vendor.return_value = (self._good_vendor(), "exact")
+        monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
+        self._patch_gnucash(monkeypatch, web_app)
+        captured = {}
+        monkeypatch.setattr(web_app.gnucash_db, "post_bill",
+                            lambda **kw: captured.update(kw))
+        web_app._process_one_bill(self._bill())
+        assert captured.get("bill_guid") == self.BILL_GUID, (
+            "post_bill must receive the bill_guid returned by create_bill"
+        )
+
+    def test_pay_bill_receives_bill_guid_from_create_bill(self, monkeypatch):
+        """pay_bill() must receive the same bill_guid that was passed to post_bill()."""
+        from bill_processor.web import app as web_app
+        mock_vm = MagicMock()
+        mock_vm.find_vendor.return_value = (self._good_vendor(), "exact")
+        monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
+        self._patch_gnucash(monkeypatch, web_app)
+        captured = {}
+        monkeypatch.setattr(web_app.gnucash_db, "pay_bill",
+                            lambda **kw: (captured.update(kw), "pay_guid")[1])
+        web_app._process_one_bill(self._bill())
+        assert captured.get("bill_guid") == self.BILL_GUID, (
+            "pay_bill must receive the bill_guid returned by create_bill"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestProcessQueueRoutes — queue manipulation logic unchanged; response is JSON

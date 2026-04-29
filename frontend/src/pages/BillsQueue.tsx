@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getBills, addBill, updateBill, deleteBill, postBill, postAllBills, type Bill, type BillIn } from '../api/bills'
+import { getSettings } from '../api/settings'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -139,12 +140,14 @@ function BillRow({
   onEdit,
   onDelete,
   onPost,
+  canPost,
   error,
 }: {
   bill: Bill
   onEdit: () => void
   onDelete: () => void
   onPost: () => void
+  canPost: boolean
   error?: string
 }) {
   return (
@@ -157,7 +160,14 @@ function BillRow({
         <td className="px-3 py-2 text-sm text-slate-500">{bill.check_number}</td>
         <td className="px-3 py-2">
           <div className="flex gap-1">
-            <Button size="sm" variant="default" className="bg-green-600 hover:bg-green-700 text-xs h-7" onClick={onPost}>
+            <Button
+              size="sm"
+              variant="default"
+              className="bg-green-600 hover:bg-green-700 text-xs h-7 disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={onPost}
+              disabled={!canPost}
+              title={!canPost ? 'Configure AP, checking, and expense accounts in Settings before posting' : undefined}
+            >
               Post
             </Button>
             <Button size="sm" variant="outline" className="text-xs h-7" onClick={onEdit}>
@@ -256,9 +266,12 @@ function EditableRow({
 export default function BillsQueue() {
   const qc = useQueryClient()
   const { data: bills = [], isLoading } = useQuery({ queryKey: ['bills'], queryFn: getBills })
+  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
   const [editing, setEditing] = useState<EditingRow | null>(null)
   const [rowErrors, setRowErrors] = useState<RowError[]>([])
   const [postingAll, setPostingAll] = useState(false)
+
+  const canPost = settings?.processing_accounts_configured === true
 
   const clearRowError = (index: number) =>
     setRowErrors(prev => prev.filter(e => e.index !== index))
@@ -316,12 +329,29 @@ export default function BillsQueue() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold text-slate-800">Bills Queue</h1>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={handlePostAll} disabled={postingAll || bills.length === 0}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handlePostAll}
+            disabled={postingAll || bills.length === 0 || !canPost}
+            title={!canPost ? 'Configure AP, checking, and expense accounts in Settings before posting' : undefined}
+          >
             {postingAll ? 'Processing...' : 'Post All'}
           </Button>
           <Button size="sm" onClick={() => setEditing({ mode: 'add' })}>+ Add Bill</Button>
         </div>
       </div>
+
+      {!canPost && settings !== undefined && (
+        <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span className="mt-0.5 shrink-0">⚠</span>
+          <span>
+            <strong>Processing accounts not configured.</strong>{' '}
+            Bills cannot be posted until the Accounts Payable, Checking, and Expense accounts are set.{' '}
+            <a href="/settings" className="underline hover:text-amber-900">Go to Settings →</a>
+          </span>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
         <table className="w-full border-collapse">
@@ -356,6 +386,7 @@ export default function BillsQueue() {
                 <BillRow
                   key={bill.index}
                   bill={bill}
+                  canPost={canPost}
                   onEdit={() => setEditing({ mode: 'edit', index: bill.index })}
                   onDelete={() => {
                     if (confirm(`Delete bill for ${bill.vendor_name}?`)) {

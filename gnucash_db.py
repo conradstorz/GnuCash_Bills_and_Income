@@ -1717,6 +1717,24 @@ def get_all_accounts() -> List[Dict]:
         return [dict(row) for row in cursor]
 
 
+def get_accounts_by_type(account_type: str) -> List[Dict]:
+    """Get all non-placeholder accounts of the given account_type.
+
+    Args:
+        account_type: GnuCash account type string, e.g. 'EXPENSE', 'PAYABLE', 'BANK'.
+
+    Returns list of dicts with 'name' and 'guid' keys, sorted by name.
+    """
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "SELECT guid, name FROM accounts "
+            "WHERE account_type = ? AND placeholder = ? "
+            "ORDER BY name",
+            (account_type, config.PLACEHOLDER_FALSE),
+        )
+        return [dict(row) for row in cursor]
+
+
 def get_invoice_by_guid(invoice_guid: str) -> Optional[Dict]:
     """Get an invoice/bill record by GUID."""
     with get_connection() as conn:
@@ -2214,6 +2232,7 @@ def pay_bill(
     owner_frame_guid = generate_guid()
     invoice_frame_guid = generate_guid()
     bill_owner_frame_guid = generate_guid()
+    txn_owner_frame_guid = generate_guid()
     
     usd_guid = get_usd_guid()
     date_posted = format_gnucash_date(payment_date)
@@ -2285,7 +2304,25 @@ def pay_bill(
                     INSERT INTO slots (obj_guid, name, slot_type, string_val)
                     VALUES (?, 'notes', 4, ?)
                 """, (payment_txn_guid, memo))
-            
+
+            # gncOwner frame on the payment transaction (CRITICAL for check printing!)
+            # GnuCash check print dialog resolves vendor address via gncOwner on the
+            # transaction itself, not via the lot.
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, int64_val)
+                VALUES (?, 'gncOwner/owner-type', 1, 4)
+            """, (txn_owner_frame_guid,))
+
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+                VALUES (?, 'gncOwner/owner-guid', 5, ?)
+            """, (txn_owner_frame_guid, vendor_guid))
+
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+                VALUES (?, 'gncOwner', 9, ?)
+            """, (payment_txn_guid, txn_owner_frame_guid))
+
             # 5. Create payment splits
             # AP split (debit - positive, linked to the BILL's lot!)
             conn.execute("""
@@ -2379,6 +2416,14 @@ def pay_bill(
             """, (bill_lot_guid,))
             if cursor.fetchone()['cnt'] == 0:
                 raise WriteVerificationError(f"Bill lot {bill_lot_guid} missing gncOwner slot after payment")
+
+            # Verify gncOwner slot added to payment transaction (needed for check address)
+            cursor = conn.execute("""
+                SELECT COUNT(*) as cnt FROM slots
+                WHERE obj_guid = ? AND name = 'gncOwner'
+            """, (payment_txn_guid,))
+            if cursor.fetchone()['cnt'] == 0:
+                raise WriteVerificationError(f"Payment transaction {payment_txn_guid} missing gncOwner slot")
 
         logger.info(f"POST-WRITE VERIFIED: Bill {bill['id']} paid successfully")
     
