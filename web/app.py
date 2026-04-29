@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from pydantic import BaseModel
 
-from bill_processor import gnucash_db, logging_setup
+from bill_processor import config, gnucash_db, logging_setup
 from bill_processor.settings_manager import settings
 import bill_processor.address_lookup as addr_lookup
 from bill_processor.utils import fuzzy_match_vendor
@@ -106,6 +106,17 @@ def _account_name(guid):
         return None
     acct = gnucash_db.get_account_by_guid(guid)
     return acct["name"] if acct else None
+
+
+def _is_correct_account_type(guid: str, expected_type: str) -> bool:
+    """Return True only if the GUID resolves to an account of the expected type."""
+    if not guid:
+        return False
+    try:
+        acct = gnucash_db.get_account_by_guid(guid)
+        return acct is not None and acct.get("account_type") == expected_type
+    except Exception:
+        return False
 
 
 def _process_one_bill(bill: dict) -> dict:
@@ -683,7 +694,11 @@ def get_settings():
         "fuzzy_ambiguous_threshold": settings.get("fuzzy_ambiguous_threshold"),
         "enabled_cash_account_guids": settings.get("enabled_cash_account_guids", []),
         "gnucash_db_path": str(settings.gnucash_db_path),
-        "processing_accounts_configured": settings.processing_accounts_configured,
+        "processing_accounts_configured": (
+            _is_correct_account_type(settings.ap_account_guid, config.ACCOUNT_TYPE_PAYABLE)
+            and _is_correct_account_type(settings.checking_account_guid, config.ACCOUNT_TYPE_BANK)
+            and _is_correct_account_type(settings.expense_account_guid, config.ACCOUNT_TYPE_EXPENSE)
+        ),
     }
 
 
