@@ -353,6 +353,17 @@ export default function BillsQueue() {
         </div>
       )}
 
+      {canPost && settings !== undefined && (
+        <div className="mb-4 flex items-start gap-2 rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800">
+          <span className="mt-0.5 shrink-0">✓</span>
+          <span className="flex flex-wrap gap-x-4 gap-y-1">
+            <span><span className="font-medium">Payables:</span> {settings.ap_account_name}</span>
+            <span><span className="font-medium">Checking:</span> {settings.checking_account_name}</span>
+            <span><span className="font-medium">Expense:</span> {settings.expense_account_name}</span>
+          </span>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
         <table className="w-full border-collapse">
           <thead>
