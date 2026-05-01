@@ -22,6 +22,7 @@ export default function Sidebar() {
   const { data: status } = useSidebarStatus()
   const [showConfirm, setShowConfirm] = useState(false)
   const [isShuttingDown, setIsShuttingDown] = useState(false)
+  const [isShutDown, setIsShutDown] = useState(false)
 
   const badges: Record<string, ReactNode> = {
     '/bills': status?.queued_bills
@@ -40,7 +41,7 @@ export default function Sidebar() {
       // Server may close before the response arrives — that's expected
     }
     setShowConfirm(false)
-    window.close()
+    setIsShutDown(true)
   }
 
   useEffect(() => {
@@ -54,11 +55,11 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="w-48 min-h-screen bg-slate-900 text-slate-300 flex flex-col">
+      <aside className="w-48 bg-slate-900 text-slate-300">
         <div className="p-4 font-semibold text-white text-sm border-b border-slate-700">
           GnuCash Bills
         </div>
-        <nav className="flex flex-col gap-1 p-2 flex-1">
+        <nav className="flex flex-col gap-1 p-2">
           {[
             { to: '/bills', label: 'Bills Queue' },
             { to: '/cash', label: 'Cash Entry' },
@@ -80,16 +81,26 @@ export default function Sidebar() {
               {badges[to] ?? null}
             </NavLink>
           ))}
+          <div className="mt-1 border-t border-slate-700 pt-1">
+            <button
+              onClick={() => setShowConfirm(true)}
+              className="w-full flex items-center px-3 py-2 rounded text-sm text-red-400 hover:bg-red-900/40 hover:text-red-300 transition-colors"
+            >
+              Shut Down
+            </button>
+          </div>
         </nav>
-        <div className="p-2 border-t border-slate-700">
-          <button
-            onClick={() => setShowConfirm(true)}
-            className="w-full flex items-center px-3 py-2 rounded text-sm text-red-400 hover:bg-red-900/40 hover:text-red-300 transition-colors"
-          >
-            Shut Down
-          </button>
-        </div>
       </aside>
+
+      {isShutDown && (
+        <div className="fixed inset-0 bg-slate-900/95 flex flex-col items-center justify-center z-50">
+          <div className="text-center space-y-3">
+            <div className="text-green-400 text-5xl">✓</div>
+            <h1 className="text-white text-2xl font-semibold">Server stopped</h1>
+            <p className="text-slate-400 text-sm">You can now close this tab.</p>
+          </div>
+        </div>
+      )}
 
       {showConfirm && (
         <div
@@ -104,7 +115,7 @@ export default function Sidebar() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="shutdown-dialog-title" className="text-white font-semibold text-base mb-1">Shut down server?</h2>
-            <p className="text-slate-400 text-sm mb-5">This will stop the server and close this tab.</p>
+            <p className="text-slate-400 text-sm mb-5">This will stop the server. You can then close this tab.</p>
             <div className="flex gap-3 justify-end">
               <button
                 autoFocus
