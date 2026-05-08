@@ -30,7 +30,8 @@ def process_bill(
     amount: float,
     memo: str,
     bill_date: date,
-    checking_account_guid: str
+    checking_account_guid: str,
+    check_number: str = ""
 ) -> bool:
     """
     Process a single bill entry following the 4-step workflow:
@@ -146,7 +147,8 @@ def process_bill(
             bill_guid=bill_guid,
             checking_account_guid=checking_account_guid,
             payment_date=bill_date,
-            memo=memo,  # Pass memo to payment - appears in check register
+            memo=memo,
+            check_number=check_number,
             verify=True
         )
         print("✓")
@@ -248,7 +250,8 @@ def process_input_file(input_path: Path) -> dict:
                 bill['amount'],
                 bill['memo'],
                 bill['date'],
-                checking_account_guid
+                checking_account_guid,
+                check_number=bill.get('check_number', '')
             )
             
             if success:
