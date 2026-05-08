@@ -17,7 +17,7 @@ def run_tests():
     # Run automated tests only (skip manual ones)
     result = subprocess.run([
         sys.executable, "-m", "pytest",
-        str(test_dir / "test_bill_workflow.py"),
+        str(test_dir),
         "-v", "-m", "not manual"
     ])
 
