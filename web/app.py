@@ -44,6 +44,15 @@ async def lifespan(app: FastAPI):
             logger.warning("Startup vendor sync skipped — schema discovery failed")
     except Exception as e:
         logger.warning(f"Startup vendor sync failed: {e}")
+    try:
+        from bill_processor.web.bill_account_resolver import BillAccountResolver
+        report = BillAccountResolver().sync_guids()
+        if report["updated"]:
+            logger.info(f"Startup bill-type GUID sync: {report['updated']} updated")
+        if report["failed"]:
+            logger.warning(f"Startup bill-type GUID sync: {len(report['failed'])} failed")
+    except Exception as e:
+        logger.warning(f"Startup bill-type GUID sync failed: {e}")
     logger.info("Server running on http://127.0.0.1:7432")
     yield
 
@@ -120,18 +129,39 @@ def _is_correct_account_type(guid: str, expected_type: str) -> bool:
 
 
 def _process_one_bill(bill: dict) -> dict:
-    """Process a single bill: create → post → pay in GnuCash.
+    """Process a single bill: create → post → pay in GnuCash."""
+    from bill_processor.web.bill_account_resolver import BillAccountResolver
+    resolver = BillAccountResolver()
+    try:
+        resolved = resolver.resolve(
+            bill.get("bill_type", ""),
+            bill.get("expense_acct", ""),
+            bill.get("checking_acct", ""),
+            bill.get("payables_acct", ""),
+        )
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
 
-    Returns {"ok": True} on success or {"ok": False, "error": "..."} on failure.
-    """
-    ap_guid = settings.ap_account_guid
-    checking_guid = settings.checking_account_guid
-    if not ap_guid or not checking_guid:
-        return {
-            "ok": False,
-            "error": "Processing accounts not configured — visit Settings > Processing Accounts",
-        }
-    ap_account = gnucash_db.get_account_by_guid(ap_guid)
+    if resolved:
+        expense_guid  = resolved["expense_guid"]
+        checking_guid = resolved["checking_guid"]
+        ap_guid       = resolved["ap_guid"]
+    else:
+        ap_guid       = settings.ap_account_guid
+        checking_guid = settings.checking_account_guid
+        expense_guid  = settings.expense_account_guid
+        if not expense_guid:
+            return {
+                "ok": False,
+                "error": "No expense account configured — visit Settings > Processing Accounts",
+            }
+        if not ap_guid or not checking_guid:
+            return {
+                "ok": False,
+                "error": "Processing accounts not configured — visit Settings > Processing Accounts",
+            }
+
+    ap_account       = gnucash_db.get_account_by_guid(ap_guid)
     checking_account = gnucash_db.get_account_by_guid(checking_guid)
     if not ap_account or not checking_account:
         return {
@@ -146,17 +176,11 @@ def _process_one_bill(bill: dict) -> dict:
     if vendor is None:
         return {"ok": False, "error": f"Vendor not found: {bill['vendor_name']}"}
 
-    expense_account_guid = settings.expense_account_guid
-    if not expense_account_guid:
-        return {
-            "ok": False,
-            "error": "No expense account configured — set one in Processing Accounts settings",
-        }
     logger.info(f"Processing bill: {bill['vendor_name']} ${bill['amount']} on {bill['date']}")
     try:
         bill_guid = gnucash_db.create_bill(
             vendor_guid=vendor["gnucash_guid"],
-            expense_account_guid=expense_account_guid,
+            expense_account_guid=expense_guid,
             amount=bill["amount"],
             memo=bill.get("memo", ""),
             bill_date=bill["date"],
@@ -188,6 +212,10 @@ def _serialize_bill(bill: dict) -> dict:
         "memo": bill.get("memo", ""),
         "date": bill["date"].isoformat() if hasattr(bill["date"], "isoformat") else str(bill["date"]),
         "check_number": bill.get("check_number", ""),
+        "bill_type": bill.get("bill_type", ""),
+        "expense_acct": bill.get("expense_acct", ""),
+        "checking_acct": bill.get("checking_acct", ""),
+        "payables_acct": bill.get("payables_acct", ""),
     }
 
 
@@ -201,6 +229,10 @@ class BillIn(BaseModel):
     memo: str = ""
     bill_date: str = ""
     check_number: str = ""
+    bill_type: str = ""
+    expense_acct: str = ""
+    checking_acct: str = ""
+    payables_acct: str = ""
 
 
 class CashEntryRow(BaseModel):
@@ -332,7 +364,8 @@ def add_bill(bill: BillIn):
         parsed_date = date.fromisoformat(bill.bill_date) if bill.bill_date else date.today()
     except ValueError:
         parsed_date = date.today()
-    queue_io.add_bill(bill.vendor_name, bill.amount, bill.memo, parsed_date, bill.check_number)
+    queue_io.add_bill(bill.vendor_name, bill.amount, bill.memo, parsed_date, bill.check_number,
+                      bill.bill_type, bill.expense_acct, bill.checking_acct, bill.payables_acct)
     return {"ok": True}
 
 
@@ -346,7 +379,8 @@ def update_bill(index: int, bill: BillIn):
         parsed_date = date.fromisoformat(bill.bill_date) if bill.bill_date else date.today()
     except ValueError:
         parsed_date = date.today()
-    ok = queue_io.update_bill(index, bill.vendor_name, bill.amount, bill.memo, parsed_date, bill.check_number)
+    ok = queue_io.update_bill(index, bill.vendor_name, bill.amount, bill.memo, parsed_date, bill.check_number,
+                              bill.bill_type, bill.expense_acct, bill.checking_acct, bill.payables_acct)
     if not ok:
         raise HTTPException(status_code=404, detail=f"Bill at index {index} not found")
     return {"ok": True}
@@ -711,6 +745,28 @@ def update_settings(body: SettingsUpdate):
         else:
             settings.set(key, value)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# API Routes: Bill Types
+# ---------------------------------------------------------------------------
+
+@app.get("/api/bill-types")
+def get_bill_types():
+    from bill_processor.web.bill_account_resolver import BillAccountResolver
+    r = BillAccountResolver()
+    return {
+        "presets": r._registry.get("presets", {}),
+        "labels": r._registry.get("labels", {}),
+    }
+
+
+@app.get("/api/bill-types/sync")
+def sync_bill_type_guids():
+    from bill_processor.web.bill_account_resolver import BillAccountResolver
+    r = BillAccountResolver()
+    result = r.sync_guids()
+    return result
 
 
 # ---------------------------------------------------------------------------
