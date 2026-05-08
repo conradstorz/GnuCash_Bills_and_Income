@@ -158,6 +158,7 @@ function BillRow({
         <td className="px-3 py-2 text-sm text-slate-500">{bill.memo}</td>
         <td className="px-3 py-2 text-sm text-slate-500">{bill.date}</td>
         <td className="px-3 py-2 text-sm text-slate-500">{bill.check_number}</td>
+        <td className="px-3 py-2 text-sm text-slate-400 italic">{bill.bill_type}</td>
         <td className="px-3 py-2">
           <div className="flex gap-1">
             <Button
@@ -181,7 +182,7 @@ function BillRow({
       </tr>
       {error && (
         <tr>
-          <td colSpan={6} className="px-3 py-1 text-xs text-red-600 bg-red-50">{error}</td>
+          <td colSpan={7} className="px-3 py-1 text-xs text-red-600 bg-red-50">{error}</td>
         </tr>
       )}
     </>
@@ -204,6 +205,7 @@ function EditableRow({
   const [memo, setMemo] = useState(initial?.memo ?? '')
   const [date, setDate] = useState(initial?.date ?? today())
   const [check, setCheck] = useState(initial?.check_number ?? '')
+  const [billType, setBillType] = useState(initial?.bill_type ?? '')
   const [errors, setErrors] = useState<{ vendor?: string; amount?: string }>({})
   const vendorRef = useRef<HTMLInputElement>(null)
   const amountRef = useRef<HTMLInputElement>(null)
@@ -226,7 +228,7 @@ function EditableRow({
       return
     }
     if (Object.keys(errors).length > 0) setErrors({})
-    onSave({ vendor_name: vendor, amount: amt, memo, bill_date: date, check_number: check })
+    onSave({ vendor_name: vendor, amount: amt, memo, bill_date: date, check_number: check, bill_type: billType })
   }
 
   return (
@@ -253,6 +255,7 @@ function EditableRow({
       <td className="px-2 py-1"><Input className="h-7 text-sm" value={memo} onChange={e => setMemo(e.target.value)} placeholder="Memo" /></td>
       <td className="px-2 py-1"><Input className="h-7 text-sm" type="date" value={date} onChange={e => setDate(e.target.value)} /></td>
       <td className="px-2 py-1"><Input className="h-7 text-sm" value={check} onChange={e => setCheck(e.target.value)} placeholder="Check #" /></td>
+      <td className="px-2 py-1"><Input className="h-7 text-sm" value={billType} onChange={e => setBillType(e.target.value)} placeholder="Bill type" /></td>
       <td className="px-2 py-1">
         <div className="flex gap-1">
           <Button size="sm" className="text-xs h-7" onClick={handleSave}>{isNew ? 'Add' : 'Save'}</Button>
@@ -373,6 +376,7 @@ export default function BillsQueue() {
               <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase">Memo</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase">Check #</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase">Bill Type</th>
               <th className="px-3 py-2 text-xs font-medium text-slate-500 uppercase">Actions</th>
             </tr>
           </thead>
@@ -411,7 +415,7 @@ export default function BillsQueue() {
             )}
             {bills.length === 0 && !editing && (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-slate-400 text-sm">
+                <td colSpan={7} className="px-3 py-8 text-center text-slate-400 text-sm">
                   No bills in queue. Click &quot;+ Add Bill&quot; to add one.
                 </td>
               </tr>
