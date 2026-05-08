@@ -352,9 +352,50 @@ class TestCalculateDistanceMiles:
         assert distance < 1500
 
 
+class TestParseInputLineNewColumns:
+    """Test parse_input_line() with new account routing columns"""
+
+    def test_no_new_columns_defaults_to_empty_strings(self):
+        result = parse_input_line("Acme, 100.00, memo, 2026-01-15")
+        assert result["bill_type"] == ""
+        assert result["expense_acct"] == ""
+        assert result["checking_acct"] == ""
+        assert result["payables_acct"] == ""
+
+    def test_bill_type_only(self):
+        result = parse_input_line("Acme, 100.00, memo, 2026-01-15, 1042, utility")
+        assert result["check_number"] == "1042"
+        assert result["bill_type"] == "utility"
+        assert result["expense_acct"] == ""
+
+    def test_all_four_new_columns(self):
+        result = parse_input_line("Acme, 100.00, memo, 2026-01-15, 1042, utility, gas, secondary, ap")
+        assert result["bill_type"] == "utility"
+        assert result["expense_acct"] == "gas"
+        assert result["checking_acct"] == "secondary"
+        assert result["payables_acct"] == "ap"
+
+    def test_empty_check_number_with_bill_type(self):
+        result = parse_input_line("Acme, 100.00, memo, 2026-01-15, , utility")
+        assert result["check_number"] == ""
+        assert result["bill_type"] == "utility"
+
+    def test_empty_bill_type_with_explicit_expense_acct(self):
+        result = parse_input_line("Acme, 100.00, memo, 2026-01-15, , , Expenses:Custom, , ")
+        assert result["bill_type"] == ""
+        assert result["expense_acct"] == "Expenses:Custom"
+        assert result["checking_acct"] == ""
+
+    def test_existing_lines_unchanged(self):
+        result = parse_input_line("Acme Corp, 100.00, supplies, 2026-01-15, 1234")
+        assert result["vendor_name"] == "Acme Corp"
+        assert result["check_number"] == "1234"
+        assert result["bill_type"] == ""
+
+
 class TestPropertyBasedUtils:
     """Property-based tests using Hypothesis"""
-    
+
     @settings(max_examples=50)
     @given(st.text())
     def test_strip_vendor_name_never_crashes(self, name):

@@ -49,11 +49,11 @@ def parse_input_line(line: str) -> Optional[dict]:
     """
     Parse a bill input line.
 
-    Format: vendor_name, amount, memo, date, check_number
-    - memo, date, and check_number are optional
+    Format: vendor_name, amount, memo, date, check_number, bill_type, expense_acct, checking_acct, payables_acct
+    - memo, date, check_number, and account routing fields are optional
     - Returns None if line is empty or invalid
 
-    Returns dict with keys: vendor_name, amount, memo, date, check_number
+    Returns dict with keys: vendor_name, amount, memo, date, check_number, bill_type, expense_acct, checking_acct, payables_acct
     """
     line = line.strip()
     
@@ -104,12 +104,22 @@ def parse_input_line(line: str) -> Optional[dict]:
     # Parse check number (optional 5th field)
     check_number = parts[4].strip() if len(parts) > 4 else ""
 
+    # Parse new account routing fields (optional columns 6-9)
+    bill_type     = parts[5].strip() if len(parts) > 5 else ""
+    expense_acct  = parts[6].strip() if len(parts) > 6 else ""
+    checking_acct = parts[7].strip() if len(parts) > 7 else ""
+    payables_acct = parts[8].strip() if len(parts) > 8 else ""
+
     return {
-        'vendor_name': vendor_name,
-        'amount': amount,
-        'memo': memo,
-        'date': bill_date,
-        'check_number': check_number,
+        'vendor_name':   vendor_name,
+        'amount':        amount,
+        'memo':          memo,
+        'date':          bill_date,
+        'check_number':  check_number,
+        'bill_type':     bill_type,
+        'expense_acct':  expense_acct,
+        'checking_acct': checking_acct,
+        'payables_acct': payables_acct,
     }
 
 
