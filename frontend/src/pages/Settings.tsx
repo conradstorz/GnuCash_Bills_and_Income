@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getSettings, updateSettings, type SettingsUpdate } from '../api/settings'
 import { getAllAccounts, getExpenseAccounts, getPayableAccounts, getBankAccounts, type Account } from '../api/accounts'
+import { getBillTypes, syncBillTypes, type BillTypesResponse } from '../api/bill_types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import api from '../api/client'
@@ -33,6 +34,25 @@ export default function Settings() {
   const { data: bankAccounts = [] } = useQuery({ queryKey: ['bankAccounts'], queryFn: getBankAccounts })
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  const { data: billTypes, refetch: refetchBillTypes } = useQuery<BillTypesResponse>({
+    queryKey: ['billTypes'],
+    queryFn: getBillTypes,
+  })
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState<{ updated: number; failed: { name: string; error: string }[] } | null>(null)
+
+  const handleSyncBillTypes = async () => {
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const result = await syncBillTypes()
+      setSyncResult(result)
+      refetchBillTypes()
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const mutation = useMutation({
     mutationFn: (body: SettingsUpdate) => updateSettings(body),
@@ -107,6 +127,60 @@ export default function Settings() {
             ))}
           </select>
         </Field>
+      </Section>
+
+      <Section title="Bill Types">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs text-slate-500">
+            Presets map a label to expense, checking, and AP accounts.
+            Edit <code className="bg-slate-100 px-1 rounded">data/bill_account_labels.json</code> to add or change presets.
+          </p>
+          <Button size="sm" variant="outline" onClick={handleSyncBillTypes} disabled={syncing}>
+            {syncing ? 'Syncing...' : 'Sync GUIDs'}
+          </Button>
+        </div>
+        {syncResult && (
+          <div className={`text-xs mb-3 p-2 rounded ${syncResult.failed.length > 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+            {syncResult.updated} account(s) updated.
+            {syncResult.failed.length > 0 && (
+              <ul className="mt-1 list-disc pl-4">
+                {syncResult.failed.map((f, i) => (
+                  <li key={i}>{f.name}: {f.error}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {!billTypes || Object.keys(billTypes.presets).length === 0 ? (
+          <p className="text-xs text-slate-400 italic">No presets defined yet.</p>
+        ) : (
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200">
+                <th className="text-left py-1 pr-3 font-medium text-slate-600">Preset</th>
+                <th className="text-left py-1 pr-3 font-medium text-slate-600">Expense</th>
+                <th className="text-left py-1 pr-3 font-medium text-slate-600">Checking</th>
+                <th className="text-left py-1 font-medium text-slate-600">AP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(billTypes.presets).map(([name, p]) => (
+                <tr key={name} className="border-b border-slate-100">
+                  <td className="py-1 pr-3 font-medium text-slate-700">{name}</td>
+                  <td className={`py-1 pr-3 ${p.expense_acct.guid ? 'text-slate-600' : 'text-amber-600'}`}>
+                    {p.expense_acct.name || '—'}{!p.expense_acct.guid && ' ⚠'}
+                  </td>
+                  <td className={`py-1 pr-3 ${p.checking_acct.guid ? 'text-slate-600' : 'text-amber-600'}`}>
+                    {p.checking_acct.name || '—'}{!p.checking_acct.guid && ' ⚠'}
+                  </td>
+                  <td className={`py-1 ${p.payables_acct.guid ? 'text-slate-600' : 'text-amber-600'}`}>
+                    {p.payables_acct.name || '—'}{!p.payables_acct.guid && ' ⚠'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Section>
 
       <Section title="Cash Entry">
