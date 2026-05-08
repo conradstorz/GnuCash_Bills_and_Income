@@ -976,7 +976,6 @@ class TestVendorKeySync:
 class TestShutdown:
     def test_returns_200(self, client, monkeypatch):
         from bill_processor.web import app as web_app
-        from unittest.mock import MagicMock
         # Replace threading in the app module so the daemon thread never fires.
         # Patching os.kill instead would race: monkeypatch restores it before
         # the 0.3s sleep expires, letting the real kill reach the test runner.

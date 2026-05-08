@@ -92,7 +92,7 @@ class TestAddBill:
     def test_appends_to_existing_file(self, queue_path):
         queue_path.write_text("Acme Corp, 100.00, supplies, 2026-01-15\n")
         queue_io.add_bill("Bob Plumbing", 200.0, "repair", date(2026, 2, 1))
-        lines = [l for l in queue_path.read_text().splitlines() if l.strip()]
+        lines = [line for line in queue_path.read_text().splitlines() if line.strip()]
         assert len(lines) == 2
 
 
@@ -114,10 +114,10 @@ class TestRemoveBill:
             "C, 30.00, m, 2026-01-03\n"
         )
         queue_io.remove_bill(1)
-        remaining = [l for l in queue_path.read_text().splitlines() if l.strip()]
+        remaining = [line for line in queue_path.read_text().splitlines() if line.strip()]
         assert len(remaining) == 2
-        assert any("A" in l for l in remaining)
-        assert any("C" in l for l in remaining)
+        assert any("A" in line for line in remaining)
+        assert any("C" in line for line in remaining)
 
     def test_returns_false_on_out_of_range_index(self, queue_path):
         queue_path.write_text("A, 10.00, m, 2026-01-01\n")
@@ -141,7 +141,7 @@ class TestUpdateBill:
             "B, 20.00, m, 2026-01-02\n"
         )
         queue_io.update_bill(0, "Updated", 15.00, "m", date(2026, 1, 1))
-        lines = [l for l in queue_path.read_text().splitlines() if l.strip()]
+        lines = [line for line in queue_path.read_text().splitlines() if line.strip()]
         assert len(lines) == 2
         assert "B" in lines[1]
 

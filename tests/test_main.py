@@ -118,9 +118,7 @@ class TestProcessBill:
 
     def test_vendor_not_found_user_creates_returns_true(self, db_connection, test_vendor_guid, test_accounts):
         mock_vm = MagicMock()
-        mock_vm.find_vendor.side_effect = [
-            (None, "not_found"),
-        ]
+        mock_vm.find_vendor.return_value = (None, "not_found")
         new_vendor = {"gnucash_guid": test_vendor_guid, "display_name": "New Vendor"}
         mock_vm.create_new_vendor.return_value = new_vendor
         mock_vm.get_or_create_expense_account.return_value = test_accounts["expense_account"]
