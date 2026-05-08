@@ -156,3 +156,43 @@ class TestUpdateBill:
         line = queue_path.read_text().strip()
         assert "5678" not in line
         assert line == "Acme, 100.00, test, 2026-01-01"
+
+
+class TestNewAccountColumns:
+    def test_no_new_columns_format_unchanged(self, queue_path):
+        queue_io.add_bill("Acme", 100.0, "supplies", date(2026, 1, 15))
+        line = queue_path.read_text().strip()
+        assert line == "Acme, 100.00, supplies, 2026-01-15"
+
+    def test_check_number_only_format_unchanged(self, queue_path):
+        queue_io.add_bill("Acme", 100.0, "supplies", date(2026, 1, 15), "1042")
+        line = queue_path.read_text().strip()
+        assert line == "Acme, 100.00, supplies, 2026-01-15, 1042"
+
+    def test_bill_type_written_and_read_back(self, queue_path):
+        queue_io.add_bill("Acme", 100.0, "memo", date(2026, 1, 15), "1042", "utility")
+        result = queue_io.read_queue()
+        assert result[0]["bill_type"] == "utility"
+        assert result[0]["check_number"] == "1042"
+
+    def test_all_four_new_columns_roundtrip(self, queue_path):
+        queue_io.add_bill("Acme", 100.0, "memo", date(2026, 1, 15), "1042",
+                          "utility", "gas_expense", "secondary", "ap")
+        result = queue_io.read_queue()
+        assert result[0]["bill_type"] == "utility"
+        assert result[0]["expense_acct"] == "gas_expense"
+        assert result[0]["checking_acct"] == "secondary"
+        assert result[0]["payables_acct"] == "ap"
+
+    def test_empty_check_number_with_bill_type(self, queue_path):
+        queue_io.add_bill("Acme", 100.0, "memo", date(2026, 1, 15), "", "grocery")
+        result = queue_io.read_queue()
+        assert result[0]["check_number"] == ""
+        assert result[0]["bill_type"] == "grocery"
+
+    def test_update_bill_preserves_new_columns(self, queue_path):
+        queue_io.add_bill("Acme", 100.0, "memo", date(2026, 1, 15), "1042", "utility")
+        queue_io.update_bill(0, "Acme", 200.0, "updated", date(2026, 2, 1), "1043", "grocery")
+        result = queue_io.read_queue()
+        assert result[0]["amount"] == 200.0
+        assert result[0]["bill_type"] == "grocery"

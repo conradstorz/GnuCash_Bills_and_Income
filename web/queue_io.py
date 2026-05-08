@@ -41,17 +41,30 @@ def _write_raw_lines(lines: list[str]) -> None:
         f.writelines(lines)
 
 
-def _format_bill_line(vendor_name: str, amount: float, memo: str, bill_date: date, check_number: str = "") -> str:
+def _format_bill_line(
+    vendor_name: str, amount: float, memo: str, bill_date: date,
+    check_number: str = "",
+    bill_type: str = "", expense_acct: str = "", checking_acct: str = "", payables_acct: str = "",
+) -> str:
     memo = memo.strip() or "no memo"
-    base = f"{vendor_name}, {amount:.2f}, {memo}, {bill_date.isoformat()}"
-    if check_number:
-        return f"{base}, {check_number}\n"
-    return f"{base}\n"
+    parts = [vendor_name, f"{amount:.2f}", memo, bill_date.isoformat()]
+    new_cols = [bill_type, expense_acct, checking_acct, payables_acct]
+    if any(new_cols):
+        parts.append(check_number)
+        parts.extend(new_cols)
+    elif check_number:
+        parts.append(check_number)
+    return ", ".join(parts) + "\n"
 
 
-def add_bill(vendor_name: str, amount: float, memo: str, bill_date: date, check_number: str = "") -> None:
+def add_bill(
+    vendor_name: str, amount: float, memo: str, bill_date: date,
+    check_number: str = "",
+    bill_type: str = "", expense_acct: str = "", checking_acct: str = "", payables_acct: str = "",
+) -> None:
     """Append a bill to the queue file."""
-    line = _format_bill_line(vendor_name, amount, memo, bill_date, check_number)
+    line = _format_bill_line(vendor_name, amount, memo, bill_date, check_number,
+                             bill_type, expense_acct, checking_acct, payables_acct)
     config.BILLS_INPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(config.BILLS_INPUT_PATH, "a", encoding="utf-8") as f:
         f.write(line)
@@ -69,12 +82,17 @@ def remove_bill(file_line_index: int) -> bool:
     return True
 
 
-def update_bill(file_line_index: int, vendor_name: str, amount: float, memo: str, bill_date: date, check_number: str = "") -> bool:
+def update_bill(
+    file_line_index: int, vendor_name: str, amount: float, memo: str, bill_date: date,
+    check_number: str = "",
+    bill_type: str = "", expense_acct: str = "", checking_acct: str = "", payables_acct: str = "",
+) -> bool:
     """Replace the bill at the given file line index with updated values."""
     lines = _read_raw_lines()
     if file_line_index < 0 or file_line_index >= len(lines):
         logger.warning(f"update_bill: line index {file_line_index} out of range (file has {len(lines)} lines)")
         return False
-    lines[file_line_index] = _format_bill_line(vendor_name, amount, memo, bill_date, check_number)
+    lines[file_line_index] = _format_bill_line(vendor_name, amount, memo, bill_date, check_number,
+                                                bill_type, expense_acct, checking_acct, payables_acct)
     _write_raw_lines(lines)
     return True
