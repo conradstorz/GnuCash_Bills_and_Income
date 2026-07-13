@@ -814,6 +814,29 @@ class TestWorkflowAccountTypeIntegrity:
         )
 
 
+class TestEffectivePayee:
+    """Unit tests for the check-payee fallback rule (gnucash_db._effective_payee)."""
+
+    def test_addr_name_used_when_present(self):
+        assert gnucash_db._effective_payee("Bullet County Sheriff", "Bullet County Taxes KY") \
+            == "Bullet County Sheriff"
+
+    def test_falls_back_to_name_when_addr_name_empty(self):
+        assert gnucash_db._effective_payee("", "Acme Co") == "Acme Co"
+
+    def test_falls_back_to_name_when_addr_name_none(self):
+        assert gnucash_db._effective_payee(None, "Acme Co") == "Acme Co"
+
+    def test_falls_back_to_name_when_addr_name_whitespace(self):
+        assert gnucash_db._effective_payee("   ", "Acme Co") == "Acme Co"
+
+    def test_addr_name_is_trimmed(self):
+        assert gnucash_db._effective_payee("  Real Payee LLC  ", "Acme Co") == "Real Payee LLC"
+
+    def test_name_none_yields_empty_string(self):
+        assert gnucash_db._effective_payee(None, None) == ""
+
+
 if __name__ == "__main__":
     # Run with: python -m pytest tests/test_bill_workflow.py -v
     # Run manual tests: python -m pytest tests/test_bill_workflow.py -v -m manual

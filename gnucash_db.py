@@ -1735,6 +1735,20 @@ def get_accounts_by_type(account_type: str) -> List[Dict]:
         return [dict(row) for row in cursor]
 
 
+def _effective_payee(addr_name: Optional[str], vendor_name: Optional[str]) -> str:
+    """Return the name to print as the check payee.
+
+    GnuCash prints the check payee from the transaction ``description`` field.
+    We use the vendor's "Payment Address -> Name" field (``vendors.addr_name``)
+    when it is non-empty, otherwise fall back to the vendor Company Name
+    (``vendors.name``). See docs/CHECK_PRINTING.md and
+    docs/superpowers/specs/2026-07-13-check-payee-from-addr-name-design.md.
+    """
+    if addr_name and addr_name.strip():
+        return addr_name.strip()
+    return vendor_name or ""
+
+
 def get_invoice_by_guid(invoice_guid: str) -> Optional[Dict]:
     """Get an invoice/bill record by GUID."""
     with get_connection() as conn:
