@@ -196,3 +196,69 @@ class TestNewAccountColumns:
         result = queue_io.read_queue()
         assert result[0]["amount"] == 200.0
         assert result[0]["bill_type"] == "grocery"
+
+
+class TestCommaInFields:
+    """A comma inside a field must survive the write→read round-trip (#2)."""
+
+    def test_vendor_name_with_comma_roundtrips(self, queue_path):
+        queue_io.add_bill("Gallant Fox - Mt, Wash", 189.32, "Jukebox share", date(2026, 7, 13))
+        result = queue_io.read_queue()
+        assert len(result) == 1
+        assert result[0]["vendor_name"] == "Gallant Fox - Mt, Wash"
+        assert result[0]["amount"] == 189.32
+        assert result[0]["memo"] == "Jukebox share"
+
+    def test_memo_with_comma_roundtrips(self, queue_path):
+        queue_io.add_bill("Acme", 50.0, "dues for Jan, Feb", date(2026, 1, 15))
+        result = queue_io.read_queue()
+        assert result[0]["memo"] == "dues for Jan, Feb"
+
+    def test_comma_field_is_quoted_in_file(self, queue_path):
+        queue_io.add_bill("Gallant Fox - Mt, Wash", 189.32, "memo", date(2026, 7, 13))
+        text = queue_path.read_text()
+        assert '"Gallant Fox - Mt, Wash"' in text
+
+    def test_plain_line_not_quoted_in_file(self, queue_path):
+        queue_io.add_bill("Acme Corp", 100.0, "supplies", date(2026, 1, 15))
+        assert queue_path.read_text().strip() == "Acme Corp, 100.00, supplies, 2026-01-15"
+
+    def test_update_bill_with_comma_roundtrips(self, queue_path):
+        queue_io.add_bill("Acme", 100.0, "memo", date(2026, 1, 15))
+        queue_io.update_bill(0, "Smith, Jones & Co", 200.0, "memo", date(2026, 2, 1))
+        result = queue_io.read_queue()
+        assert result[0]["vendor_name"] == "Smith, Jones & Co"
+
+
+class TestReadQueueErrors:
+    """Malformed lines must be surfaced, not silently dropped (#3)."""
+
+    def test_no_errors_for_valid_file(self, queue_path):
+        queue_path.write_text("Acme Corp, 100.00, supplies, 2026-01-15\n")
+        assert queue_io.read_queue_errors() == []
+
+    def test_malformed_line_reported(self, queue_path):
+        queue_path.write_text("Gallant Fox - Mt, Wash, 189.32, memo, 2026-07-13\n")
+        errors = queue_io.read_queue_errors()
+        assert len(errors) == 1
+        assert errors[0]["_index"] == 0
+        assert "Wash" in errors[0]["_raw"]
+        assert errors[0]["error"]
+
+    def test_blank_and_comment_lines_not_reported(self, queue_path):
+        queue_path.write_text("\n# a comment\nAcme, 100.00, memo, 2026-01-15\n")
+        assert queue_io.read_queue_errors() == []
+
+    def test_valid_and_invalid_mixed(self, queue_path):
+        queue_path.write_text(
+            "Acme, 100.00, memo, 2026-01-15\n"
+            "totally broken\n"
+        )
+        good = queue_io.read_queue()
+        bad = queue_io.read_queue_errors()
+        assert len(good) == 1
+        assert len(bad) == 1
+        assert bad[0]["_index"] == 1
+
+    def test_missing_file_returns_empty_errors(self, queue_path):
+        assert queue_io.read_queue_errors() == []

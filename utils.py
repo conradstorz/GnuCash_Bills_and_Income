@@ -3,6 +3,8 @@ Utility functions for bill processor.
 Name stripping, fuzzy matching, date parsing, etc.
 """
 
+import csv
+import io
 from datetime import datetime, date
 from typing import Optional, Tuple, List
 from thefuzz import fuzz, process
@@ -45,6 +47,23 @@ def strip_vendor_name(name: str) -> str:
     return stripped
 
 
+def _split_csv_fields(line: str) -> List[str]:
+    """
+    Split a bill line into fields using RFC4180 CSV rules.
+
+    Fields containing commas can be wrapped in double quotes, e.g.
+    ``"Gallant Fox - Mt, Wash", 189.32, memo`` yields a vendor name with an
+    embedded comma. ``skipinitialspace=True`` tolerates the ``, `` separator
+    the queue file is written with. Falls back to a naive comma split if the
+    line is not valid CSV (e.g. an unbalanced quote).
+    """
+    try:
+        row = next(csv.reader([line], skipinitialspace=True))
+    except (csv.Error, StopIteration):
+        row = line.split(',')
+    return [p.strip() for p in row]
+
+
 def parse_input_line(line: str) -> Optional[dict]:
     """
     Parse a bill input line.
@@ -55,33 +74,51 @@ def parse_input_line(line: str) -> Optional[dict]:
 
     Returns dict with keys: vendor_name, amount, memo, date, check_number, bill_type, expense_acct, checking_acct, payables_acct
     """
+    parsed, _ = parse_input_line_verbose(line)
+    return parsed
+
+
+def parse_input_line_verbose(line: str) -> Tuple[Optional[dict], Optional[str]]:
+    """
+    Parse a bill input line, also returning a human-readable error reason.
+
+    Returns a ``(parsed, error)`` tuple:
+    - ``(dict, None)``  — line parsed successfully
+    - ``(None, None)``  — line is blank or a comment (skipped, not an error)
+    - ``(None, str)``   — line is a genuine parse failure; ``str`` explains why
+
+    See :func:`parse_input_line` for the field format.
+    """
     line = line.strip()
-    
-    # Skip empty lines and comments
+
+    # Skip empty lines and comments (not errors)
     if not line or line.startswith('#'):
-        return None
-    
-    # Split by comma
-    parts = [p.strip() for p in line.split(',')]
-    
+        return None, None
+
+    # Split into fields, honoring quoted fields that contain commas
+    parts = _split_csv_fields(line)
+
     if len(parts) < 2:
-        logger.warning(f"Invalid line (need at least name and amount): {line}")
-        return None
-    
+        msg = "line needs at least a vendor name and amount"
+        logger.warning(f"Invalid line ({msg}): {line}")
+        return None, msg
+
     # Parse vendor name
     vendor_name = parts[0]
     if not vendor_name:
-        logger.warning(f"Empty vendor name in line: {line}")
-        return None
-    
+        msg = "empty vendor name"
+        logger.warning(f"{msg.capitalize()} in line: {line}")
+        return None, msg
+
     # Parse amount
     try:
         amount_str = parts[1].replace('$', '').replace(',', '')
         amount = float(amount_str)
     except ValueError:
+        msg = f"invalid amount '{parts[1]}'"
         logger.warning(f"Invalid amount '{parts[1]}' in line: {line}")
-        return None
-    
+        return None, msg
+
     # Parse memo (optional)
     memo = parts[2] if len(parts) > 2 and parts[2] else config.DEFAULT_MEMO
     
@@ -120,7 +157,7 @@ def parse_input_line(line: str) -> Optional[dict]:
         'expense_acct':  expense_acct,
         'checking_acct': checking_acct,
         'payables_acct': payables_acct,
-    }
+    }, None
 
 
 def fuzzy_match_vendor(

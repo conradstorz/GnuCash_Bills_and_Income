@@ -25,7 +25,14 @@ export interface BillIn {
   payables_acct?: string
 }
 
-export const getBills     = () => api.get<Bill[]>('/bills').then(r => r.data)
+export interface BillError {
+  index: number
+  raw: string
+  error: string
+}
+
+export const getBills      = () => api.get<Bill[]>('/bills').then(r => r.data)
+export const getBillErrors = () => api.get<BillError[]>('/bills/errors').then(r => r.data)
 export const addBill      = (b: BillIn) => api.post('/bills', b).then(r => r.data)
 export const updateBill   = (index: number, b: BillIn) => api.put(`/bills/${index}`, b).then(r => r.data)
 export const deleteBill   = (index: number) => api.delete(`/bills/${index}`).then(r => r.data)

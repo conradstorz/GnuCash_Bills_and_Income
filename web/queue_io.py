@@ -7,7 +7,7 @@ from typing import Optional
 from loguru import logger
 
 from bill_processor import config
-from bill_processor.utils import parse_input_line
+from bill_processor.utils import parse_input_line_verbose
 
 
 def read_queue() -> list[dict]:
@@ -19,12 +19,33 @@ def read_queue() -> list[dict]:
         lines = f.readlines()
     bills = []
     for i, line in enumerate(lines):
-        parsed = parse_input_line(line)
+        parsed, _error = parse_input_line_verbose(line)
         if parsed:
             parsed["_index"] = i
             parsed["_raw"] = line.rstrip()
             bills.append(parsed)
     return bills
+
+
+def read_queue_errors() -> list[dict]:
+    """
+    Return queue lines that failed to parse so the UI can surface them instead
+    of silently dropping them.
+
+    Each entry is ``{"_index": int, "_raw": str, "error": str}``. Blank lines
+    and ``#`` comments are not errors and are excluded.
+    """
+    path = config.BILLS_INPUT_PATH
+    if not path.exists():
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    errors = []
+    for i, line in enumerate(lines):
+        parsed, error = parse_input_line_verbose(line)
+        if parsed is None and error is not None:
+            errors.append({"_index": i, "_raw": line.rstrip(), "error": error})
+    return errors
 
 
 def _read_raw_lines() -> list[str]:
@@ -41,6 +62,17 @@ def _write_raw_lines(lines: list[str]) -> None:
         f.writelines(lines)
 
 
+def _quote_field(field: str) -> str:
+    """
+    Quote a field for the ``, ``-separated queue file if it contains a comma,
+    double quote, or newline (RFC4180 rules). Keeps plain fields unquoted so
+    the file stays human-readable. Round-trips with utils._split_csv_fields.
+    """
+    if any(c in field for c in (',', '"', '\n', '\r')):
+        return '"' + field.replace('"', '""') + '"'
+    return field
+
+
 def _format_bill_line(
     vendor_name: str, amount: float, memo: str, bill_date: date,
     check_number: str = "",
@@ -54,7 +86,7 @@ def _format_bill_line(
         parts.extend(new_cols)
     elif check_number:
         parts.append(check_number)
-    return ", ".join(parts) + "\n"
+    return ", ".join(_quote_field(p) for p in parts) + "\n"
 
 
 def add_bill(

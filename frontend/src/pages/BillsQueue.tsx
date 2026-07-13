@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getBills, addBill, updateBill, deleteBill, postBill, postAllBills, type Bill, type BillIn } from '../api/bills'
+import { getBills, getBillErrors, addBill, updateBill, deleteBill, postBill, postAllBills, type Bill, type BillIn } from '../api/bills'
 import { getSettings } from '../api/settings'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -269,6 +269,7 @@ function EditableRow({
 export default function BillsQueue() {
   const qc = useQueryClient()
   const { data: bills = [], isLoading } = useQuery({ queryKey: ['bills'], queryFn: getBills })
+  const { data: billErrors = [] } = useQuery({ queryKey: ['bill-errors'], queryFn: getBillErrors })
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
   const [editing, setEditing] = useState<EditingRow | null>(null)
   const [rowErrors, setRowErrors] = useState<RowError[]>([])
@@ -276,29 +277,34 @@ export default function BillsQueue() {
 
   const canPost = settings?.processing_accounts_configured === true
 
+  const invalidateBills = () => {
+    qc.invalidateQueries({ queryKey: ['bills'] })
+    qc.invalidateQueries({ queryKey: ['bill-errors'] })
+  }
+
   const clearRowError = (index: number) =>
     setRowErrors(prev => prev.filter(e => e.index !== index))
 
   const addMutation = useMutation({
     mutationFn: addBill,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['bills'] }); setEditing(null) },
+    onSuccess: () => { invalidateBills(); setEditing(null) },
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ index, bill }: { index: number; bill: BillIn }) => updateBill(index, bill),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['bills'] }); setEditing(null) },
+    onSuccess: () => { invalidateBills(); setEditing(null) },
   })
 
   const deleteMutation = useMutation({
     mutationFn: deleteBill,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['bills'] }),
+    onSuccess: () => invalidateBills(),
   })
 
   const postMutation = useMutation({
     mutationFn: postBill,
     onSuccess: (data, index) => {
       if (data.ok) {
-        qc.invalidateQueries({ queryKey: ['bills'] })
+        invalidateBills()
         clearRowError(index)
       } else {
         setRowErrors(prev => [...prev.filter(e => e.index !== index), { index, message: data.error }])
@@ -310,7 +316,7 @@ export default function BillsQueue() {
     setPostingAll(true)
     try {
       const result = await postAllBills()
-      qc.invalidateQueries({ queryKey: ['bills'] })
+      invalidateBills()
       if (result.failed?.length) {
         const errors: RowError[] = result.failed.map((f: { vendor_name: string; error: string }, i: number) => ({
           index: i,
@@ -344,6 +350,30 @@ export default function BillsQueue() {
           <Button size="sm" onClick={() => setEditing({ mode: 'add' })}>+ Add Bill</Button>
         </div>
       </div>
+
+      {billErrors.length > 0 && (
+        <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 shrink-0">⚠</span>
+            <div>
+              <strong>
+                {billErrors.length} queue line{billErrors.length > 1 ? 's' : ''} could not be read
+              </strong>{' '}
+              and {billErrors.length > 1 ? 'were' : 'was'} skipped. Fix{' '}
+              <code>data/bills_to_process.txt</code> (a comma inside a vendor name or memo must be
+              wrapped in double quotes).
+              <ul className="mt-2 space-y-1">
+                {billErrors.map(e => (
+                  <li key={e.index} className="font-mono text-xs">
+                    <span className="text-red-500">line {e.index + 1}:</span> {e.raw}{' '}
+                    <span className="italic text-red-600">— {e.error}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!canPost && settings !== undefined && (
         <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">

@@ -354,6 +354,15 @@ def get_bills():
     return [_serialize_bill(b) for b in queue]
 
 
+@app.get("/api/bills/errors")
+def get_bill_errors():
+    """Queue lines that failed to parse, so the UI can surface them."""
+    return [
+        {"index": e["_index"], "raw": e["_raw"], "error": e["error"]}
+        for e in queue_io.read_queue_errors()
+    ]
+
+
 @app.post("/api/bills", status_code=201)
 def add_bill(bill: BillIn):
     if not bill.vendor_name.strip():

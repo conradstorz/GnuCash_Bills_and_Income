@@ -9,6 +9,7 @@ from hypothesis import given, strategies as st, settings
 from bill_processor.utils import (
     strip_vendor_name,
     parse_input_line,
+    parse_input_line_verbose,
     fuzzy_match_vendor,
     format_currency,
     format_date,
@@ -165,6 +166,65 @@ class TestParseInputLineCheckNumber:
         result = parse_input_line("Acme Electric, 150.50, memo, 2026-03-15, EFT-99")
         assert result is not None
         assert result["check_number"] == "EFT-99"
+
+
+class TestParseInputLineQuotedFields:
+    """Fields containing commas must be quoted (RFC4180-style CSV)."""
+
+    def test_quoted_vendor_name_with_comma(self):
+        result = parse_input_line('"Gallant Fox - Mt, Wash", 189.32, Jukebox share, 2026-07-13')
+        assert result is not None
+        assert result["vendor_name"] == "Gallant Fox - Mt, Wash"
+        assert result["amount"] == 189.32
+        assert result["memo"] == "Jukebox share"
+        assert result["date"] == date(2026, 7, 13)
+
+    def test_quoted_memo_with_comma(self):
+        result = parse_input_line('Acme, 50.00, "January, February dues", 2026-01-15')
+        assert result is not None
+        assert result["vendor_name"] == "Acme"
+        assert result["memo"] == "January, February dues"
+
+    def test_embedded_double_quote_in_field(self):
+        result = parse_input_line('"The ""Big"" Vendor", 10.00, memo, 2026-01-15')
+        assert result is not None
+        assert result["vendor_name"] == 'The "Big" Vendor'
+
+    def test_unquoted_lines_still_parse(self):
+        result = parse_input_line("Acme Corp, 100.00, supplies, 2026-01-15")
+        assert result is not None
+        assert result["vendor_name"] == "Acme Corp"
+        assert result["amount"] == 100.00
+
+
+class TestParseInputLineVerbose:
+    """parse_input_line_verbose() returns (parsed, error_message)."""
+
+    def test_valid_line_returns_dict_and_no_error(self):
+        parsed, error = parse_input_line_verbose("Acme, 100.00, memo, 2026-01-15")
+        assert parsed is not None
+        assert error is None
+
+    def test_blank_line_is_not_an_error(self):
+        parsed, error = parse_input_line_verbose("   ")
+        assert parsed is None
+        assert error is None
+
+    def test_comment_line_is_not_an_error(self):
+        parsed, error = parse_input_line_verbose("# a comment")
+        assert parsed is None
+        assert error is None
+
+    def test_invalid_amount_reports_error(self):
+        parsed, error = parse_input_line_verbose("Gallant Fox - Mt, Wash, 189.32, memo")
+        assert parsed is None
+        assert error is not None
+        assert "Wash" in error
+
+    def test_missing_amount_reports_error(self):
+        parsed, error = parse_input_line_verbose("Just a vendor name")
+        assert parsed is None
+        assert error is not None
 
     def test_existing_four_field_dict_keys_unchanged(self):
         result = parse_input_line("Acme Electric, 150.50, memo, 2026-03-15, 1042")
