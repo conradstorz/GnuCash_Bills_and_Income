@@ -1735,17 +1735,40 @@ def get_accounts_by_type(account_type: str) -> List[Dict]:
         return [dict(row) for row in cursor]
 
 
+def _effective_payee(addr_name: Optional[str], vendor_name: Optional[str]) -> str:
+    """Return the name to print as the check payee.
+
+    GnuCash prints the check payee from the transaction ``description`` field.
+    We use the vendor's "Payment Address -> Name" field (``vendors.addr_name``)
+    when it is non-empty, otherwise fall back to the vendor Company Name
+    (``vendors.name``). See docs/CHECK_PRINTING.md and
+    docs/superpowers/specs/2026-07-13-check-payee-from-addr-name-design.md.
+    """
+    if addr_name and addr_name.strip():
+        return addr_name.strip()
+    return vendor_name or ""
+
+
 def get_invoice_by_guid(invoice_guid: str) -> Optional[Dict]:
-    """Get an invoice/bill record by GUID."""
+    """Get an invoice/bill record by GUID.
+
+    Adds a computed ``check_payee`` key: the vendor's addr_name when set,
+    otherwise the vendor name. This is what should be printed as the check
+    payee (see _effective_payee).
+    """
     with get_connection() as conn:
         cursor = conn.execute("""
-            SELECT i.*, v.name as vendor_name
+            SELECT i.*, v.name as vendor_name, v.addr_name as vendor_addr_name
             FROM invoices i
             LEFT JOIN vendors v ON i.owner_guid = v.guid
             WHERE i.guid = ?
         """, (invoice_guid,))
         row = cursor.fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        bill = dict(row)
+        bill['check_payee'] = _effective_payee(bill.get('vendor_addr_name'), bill.get('vendor_name'))
+        return bill
 
 
 def get_bills_by_status(status: str = 'unposted') -> List[Dict]:
@@ -2052,7 +2075,7 @@ def post_bill(
                 INSERT INTO transactions (
                     guid, currency_guid, num, post_date, enter_date, description
                 ) VALUES (?, ?, '', ?, ?, ?)
-            """, (txn_guid, usd_guid, date_posted, date_entered, bill['vendor_name']))
+            """, (txn_guid, usd_guid, date_posted, date_entered, bill['check_payee']))
             
             # 4. Create transaction slots
             # trans-txn-type = "I" for Invoice (CRITICAL!)
@@ -2289,7 +2312,7 @@ def pay_bill(
                 INSERT INTO transactions (
                     guid, currency_guid, num, post_date, enter_date, description
                 ) VALUES (?, ?, ?, ?, ?, ?)
-            """, (payment_txn_guid, usd_guid, check_number, date_posted, date_entered, bill['vendor_name']))
+            """, (payment_txn_guid, usd_guid, check_number, date_posted, date_entered, bill['check_payee']))
             
             # 4. Create transaction slots
             # trans-txn-type = "P" for Payment (CRITICAL!)
@@ -2504,11 +2527,17 @@ def create_posted_bill_DEPRECATED(
     date_entered = format_gnucash_timestamp()
     date_posted_gdate = bill_date.strftime('%Y%m%d')  # YYYYMMDD format for gdate slots
     
-    # Get vendor name for transaction description
+    # Get payee for transaction description: addr_name ("Payment Address -> Name")
+    # when set, else the vendor Company Name.
     with get_connection() as conn:
-        cursor = conn.execute("SELECT name FROM vendors WHERE guid = ?", (vendor_guid,))
+        cursor = conn.execute(
+            "SELECT name, addr_name FROM vendors WHERE guid = ?", (vendor_guid,)
+        )
         vendor_row = cursor.fetchone()
-        vendor_name = vendor_row['name'] if vendor_row else "Unknown Vendor"
+        if vendor_row:
+            vendor_name = _effective_payee(vendor_row['addr_name'], vendor_row['name'])
+        else:
+            vendor_name = "Unknown Vendor"
     
     with get_connection(readonly=False) as conn:
         # Create the lot (tracks amounts owed)
