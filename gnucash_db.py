@@ -2527,11 +2527,17 @@ def create_posted_bill_DEPRECATED(
     date_entered = format_gnucash_timestamp()
     date_posted_gdate = bill_date.strftime('%Y%m%d')  # YYYYMMDD format for gdate slots
     
-    # Get vendor name for transaction description
+    # Get payee for transaction description: addr_name ("Payment Address -> Name")
+    # when set, else the vendor Company Name.
     with get_connection() as conn:
-        cursor = conn.execute("SELECT name FROM vendors WHERE guid = ?", (vendor_guid,))
+        cursor = conn.execute(
+            "SELECT name, addr_name FROM vendors WHERE guid = ?", (vendor_guid,)
+        )
         vendor_row = cursor.fetchone()
-        vendor_name = vendor_row['name'] if vendor_row else "Unknown Vendor"
+        if vendor_row:
+            vendor_name = _effective_payee(vendor_row['addr_name'], vendor_row['name'])
+        else:
+            vendor_name = "Unknown Vendor"
     
     with get_connection(readonly=False) as conn:
         # Create the lot (tracks amounts owed)

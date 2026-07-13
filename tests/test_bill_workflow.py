@@ -956,6 +956,22 @@ class TestCheckPayee:
         assert self._description(db_connection, payment_txn_guid) == expected, \
             "Whitespace-only addr_name should fall back to vendor name"
 
+    def test_deprecated_create_posted_bill_uses_addr_name(
+        self, db_connection, test_vendor_guid, test_accounts, bill_data
+    ):
+        self._set_addr_name(db_connection, test_vendor_guid, "Deprecated Payee LLC")
+
+        bill_guid = gnucash_db.create_posted_bill_DEPRECATED(
+            vendor_guid=test_vendor_guid,
+            expense_account_guid=test_accounts['expense_account'],
+            amount=bill_data['amount'],
+            memo=bill_data['memo'],
+            bill_date=bill_data['date'],
+        )
+        post_txn_guid = self._post_txn_guid(db_connection, bill_guid)
+        assert self._description(db_connection, post_txn_guid) == "Deprecated Payee LLC", \
+            "Deprecated path should also honor addr_name as payee"
+
 
 if __name__ == "__main__":
     # Run with: python -m pytest tests/test_bill_workflow.py -v
