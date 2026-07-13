@@ -837,6 +837,126 @@ class TestEffectivePayee:
         assert gnucash_db._effective_payee(None, None) == ""
 
 
+class TestCheckPayee:
+    """The check payee (transaction description) comes from vendor.addr_name
+    with fallback to vendor.name."""
+
+    @staticmethod
+    def _set_addr_name(db_path, vendor_guid, value):
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("UPDATE vendors SET addr_name = ? WHERE guid = ?", (value, vendor_guid))
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def _vendor_name(db_path, vendor_guid):
+        conn = sqlite3.connect(str(db_path))
+        row = conn.execute("SELECT name FROM vendors WHERE guid = ?", (vendor_guid,)).fetchone()
+        conn.close()
+        return row[0]
+
+    @staticmethod
+    def _description(db_path, txn_guid):
+        conn = sqlite3.connect(str(db_path))
+        row = conn.execute(
+            "SELECT description FROM transactions WHERE guid = ?", (txn_guid,)
+        ).fetchone()
+        conn.close()
+        return row[0]
+
+    @staticmethod
+    def _post_txn_guid(db_path, bill_guid):
+        conn = sqlite3.connect(str(db_path))
+        row = conn.execute(
+            "SELECT post_txn FROM invoices WHERE guid = ?", (bill_guid,)
+        ).fetchone()
+        conn.close()
+        return row[0]
+
+    def test_addr_name_becomes_payee_on_both_transactions(
+        self, db_connection, test_vendor_guid, test_accounts, bill_data
+    ):
+        self._set_addr_name(db_connection, test_vendor_guid, "Real Payee LLC")
+
+        bill_guid = gnucash_db.create_bill(
+            vendor_guid=test_vendor_guid,
+            expense_account_guid=test_accounts['expense_account'],
+            amount=bill_data['amount'],
+            memo=bill_data['memo'],
+            bill_date=bill_data['date'],
+        )
+        gnucash_db.post_bill(
+            bill_guid=bill_guid,
+            post_date=bill_data['date'],
+            ap_account_guid=test_accounts['ap_account'],
+        )
+        payment_txn_guid = gnucash_db.pay_bill(
+            bill_guid=bill_guid,
+            checking_account_guid=test_accounts['checking_account'],
+            payment_date=bill_data['date'],
+        )
+
+        post_txn_guid = self._post_txn_guid(db_connection, bill_guid)
+        assert self._description(db_connection, post_txn_guid) == "Real Payee LLC", \
+            "Posting (AP) transaction description should be addr_name"
+        assert self._description(db_connection, payment_txn_guid) == "Real Payee LLC", \
+            "Payment transaction description (check payee) should be addr_name"
+
+    def test_falls_back_to_vendor_name_when_addr_name_empty(
+        self, db_connection, test_vendor_guid, test_accounts, bill_data
+    ):
+        self._set_addr_name(db_connection, test_vendor_guid, "")
+        expected = self._vendor_name(db_connection, test_vendor_guid)
+
+        bill_guid = gnucash_db.create_bill(
+            vendor_guid=test_vendor_guid,
+            expense_account_guid=test_accounts['expense_account'],
+            amount=bill_data['amount'],
+            memo=bill_data['memo'],
+            bill_date=bill_data['date'],
+        )
+        gnucash_db.post_bill(
+            bill_guid=bill_guid,
+            post_date=bill_data['date'],
+            ap_account_guid=test_accounts['ap_account'],
+        )
+        payment_txn_guid = gnucash_db.pay_bill(
+            bill_guid=bill_guid,
+            checking_account_guid=test_accounts['checking_account'],
+            payment_date=bill_data['date'],
+        )
+
+        assert self._description(db_connection, payment_txn_guid) == expected, \
+            "Payment description should fall back to vendor name when addr_name empty"
+
+    def test_falls_back_when_addr_name_whitespace(
+        self, db_connection, test_vendor_guid, test_accounts, bill_data
+    ):
+        self._set_addr_name(db_connection, test_vendor_guid, "   ")
+        expected = self._vendor_name(db_connection, test_vendor_guid)
+
+        bill_guid = gnucash_db.create_bill(
+            vendor_guid=test_vendor_guid,
+            expense_account_guid=test_accounts['expense_account'],
+            amount=bill_data['amount'],
+            memo=bill_data['memo'],
+            bill_date=bill_data['date'],
+        )
+        gnucash_db.post_bill(
+            bill_guid=bill_guid,
+            post_date=bill_data['date'],
+            ap_account_guid=test_accounts['ap_account'],
+        )
+        payment_txn_guid = gnucash_db.pay_bill(
+            bill_guid=bill_guid,
+            checking_account_guid=test_accounts['checking_account'],
+            payment_date=bill_data['date'],
+        )
+
+        assert self._description(db_connection, payment_txn_guid) == expected, \
+            "Whitespace-only addr_name should fall back to vendor name"
+
+
 if __name__ == "__main__":
     # Run with: python -m pytest tests/test_bill_workflow.py -v
     # Run manual tests: python -m pytest tests/test_bill_workflow.py -v -m manual
