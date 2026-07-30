@@ -31,6 +31,7 @@ data/memo_history.json
 data/bills_to_process.txt
 data/gnucash_schema.json
 data/user_settings.json
+data/bill_account_labels.json
 
 # Columbo snapshots (working files, not source)
 snapshot_before.json
