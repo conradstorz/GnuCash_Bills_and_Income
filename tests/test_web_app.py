@@ -255,6 +255,7 @@ class TestProcessOneBill:
         monkeypatch.setattr(web_app, "VendorManager", lambda: mock_vm)
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
+        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
         monkeypatch.setattr(web_app.gnucash_db, "get_account_by_guid",
                             lambda guid: {"name": "Test Account", "guid": guid})
         result = web_app._process_one_bill(self._bill())
@@ -325,6 +326,7 @@ class TestProcessOneBill:
         from bill_processor.web import app as web_app
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", None)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", self.CHECKING_GUID)
+        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
         result = web_app._process_one_bill(self._bill())
         assert result["ok"] is False
         assert "Processing accounts not configured" in result["error"]
@@ -333,6 +335,7 @@ class TestProcessOneBill:
         from bill_processor.web import app as web_app
         monkeypatch.setitem(web_app.settings._settings, "ap_account_guid", "e" * 32)
         monkeypatch.setitem(web_app.settings._settings, "checking_account_guid", None)
+        monkeypatch.setitem(web_app.settings._settings, "expense_account_guid", self.EXPENSE_GUID)
         result = web_app._process_one_bill(self._bill())
         assert result["ok"] is False
         assert "Processing accounts not configured" in result["error"]
