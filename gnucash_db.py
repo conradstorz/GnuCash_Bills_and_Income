@@ -1478,11 +1478,18 @@ def create_cash_entry(
     line_items: list,
     description: str = "",
     verify: bool = True,
-) -> str:
-    """Create a multi-split cash-on-hand transaction.
+) -> list:
+    """Create one cash-on-hand transaction per line item.
+
+    Each line item becomes its own two-split GnuCash transaction: the row's
+    account balanced against SAMUSE Cash-on-hand. Keeping every row in its own
+    transaction means no account register shows unrelated sibling splits.
 
     line_items: list of dicts with keys: account_guid, memo, amount
-    Returns: transaction GUID
+    description: retained for backward compatibility; no longer used as a
+        transaction description (each transaction uses its own row memo, or
+        config.DEFAULT_MEMO when the row memo is blank).
+    Returns: list of transaction GUIDs, one per line item, in input order.
     """
     if not line_items:
         raise ValueError("line_items must not be empty")
@@ -1497,56 +1504,58 @@ def create_cash_entry(
     samuse_guid = get_samuse_account_guid()
     usd_guid = get_usd_guid()
 
-    total_cents = int(round(sum(item["amount"] for item in line_items) * 100))
-    line_cents = [int(round(-item["amount"] * 100)) for item in line_items]
-
-    # Verify balance before any write
-    assert total_cents + sum(line_cents) == 0, "Transaction would not balance"
-
     post_date_str = format_gnucash_date(entry_date, include_time=True)
     enter_date_str = format_gnucash_timestamp()
-    txn_guid = generate_guid()
-    samuse_split_guid = generate_guid()
 
-    logger.info(f"Creating cash entry: {description!r}, {len(line_items)} line items, total=${total_cents/100:.2f}")
+    logger.info(f"Creating cash entry: {len(line_items)} line items (one transaction each)")
+
+    txn_guids = []
+    created = []  # (txn_guid, samuse_split_guid, row_split_guid)
 
     with get_connection(readonly=False) as conn:
-        conn.execute(
-            "INSERT INTO transactions (guid, currency_guid, num, post_date, enter_date, description) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (txn_guid, usd_guid, "", post_date_str, enter_date_str, description),
-        )
-        # SAMUSE balancing split
-        conn.execute(
-            "INSERT INTO splits (guid, tx_guid, account_guid, memo, action, "
-            "reconcile_state, reconcile_date, "
-            "value_num, value_denom, quantity_num, quantity_denom, lot_guid) "
-            "VALUES (?, ?, ?, ?, '', 'n', NULL, ?, 100, ?, 100, NULL)",
-            (samuse_split_guid, txn_guid, samuse_guid, description, total_cents, total_cents),
-        )
-        # One split per line item
-        line_split_guids = []
-        for item, cents in zip(line_items, line_cents):
-            split_guid = generate_guid()
-            line_split_guids.append(split_guid)
+        for item in line_items:
+            cents = int(round(item["amount"] * 100))
+            memo = item.get("memo", "") or ""
+            txn_desc = memo.strip() or config.DEFAULT_MEMO
+
+            txn_guid = generate_guid()
+            samuse_split_guid = generate_guid()
+            row_split_guid = generate_guid()
+
+            conn.execute(
+                "INSERT INTO transactions (guid, currency_guid, num, post_date, enter_date, description) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (txn_guid, usd_guid, "", post_date_str, enter_date_str, txn_desc),
+            )
+            # SAMUSE Cash-on-hand leg (+amount)
             conn.execute(
                 "INSERT INTO splits (guid, tx_guid, account_guid, memo, action, "
                 "reconcile_state, reconcile_date, "
                 "value_num, value_denom, quantity_num, quantity_denom, lot_guid) "
                 "VALUES (?, ?, ?, ?, '', 'n', NULL, ?, 100, ?, 100, NULL)",
-                (split_guid, txn_guid, item["account_guid"], item["memo"], cents, cents),
+                (samuse_split_guid, txn_guid, samuse_guid, txn_desc, cents, cents),
             )
+            # Row account leg (-amount)
+            conn.execute(
+                "INSERT INTO splits (guid, tx_guid, account_guid, memo, action, "
+                "reconcile_state, reconcile_date, "
+                "value_num, value_denom, quantity_num, quantity_denom, lot_guid) "
+                "VALUES (?, ?, ?, ?, '', 'n', NULL, ?, 100, ?, 100, NULL)",
+                (row_split_guid, txn_guid, item["account_guid"], memo, -cents, -cents),
+            )
+            txn_guids.append(txn_guid)
+            created.append((txn_guid, samuse_split_guid, row_split_guid))
         conn.commit()
 
-    logger.info(f"Cash entry created: txn_guid={txn_guid}")
+    logger.info(f"Cash entry created: {len(txn_guids)} transactions")
 
     if verify:
-        verify_record_exists("transactions", txn_guid, "cash entry transaction")
-        verify_record_exists("splits", samuse_split_guid, "SAMUSE split")
-        for i, guid in enumerate(line_split_guids):
-            verify_record_exists("splits", guid, f"cash entry split {i+1}")
+        for txn_guid, samuse_split_guid, row_split_guid in created:
+            verify_record_exists("transactions", txn_guid, "cash entry transaction")
+            verify_record_exists("splits", samuse_split_guid, "SAMUSE split")
+            verify_record_exists("splits", row_split_guid, "cash entry row split")
 
-    return txn_guid
+    return txn_guids
 
 
 def create_cash_deposit(

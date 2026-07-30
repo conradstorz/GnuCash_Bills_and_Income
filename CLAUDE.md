@@ -134,7 +134,7 @@ python columbo.py path/to/book.gnucash
 The dashboard uses a split-screen layout: bills panel (left) and cash entry panel (right).
 
 **Cash entry DB functions** (`gnucash_db.py`):
-- `create_cash_entry()` — creates the multi-split batch transaction in GnuCash (SAMUSE + N income/asset splits)
+- `create_cash_entry()` — writes one two-split transaction per row (row account ↔ SAMUSE Cash-on-hand); returns a list of transaction GUIDs, one per row. Keeps each account register free of unrelated sibling splits.
 - `create_cash_deposit()` — creates an independent bank deposit transaction (SAMUSE → bank account; amount unrelated to batch total)
 - `get_samuse_account_guid()` — looks up and caches the SAMUSE Cash-on-hand account GUID
 - `get_cash_accounts()` — returns selectable income/asset accounts

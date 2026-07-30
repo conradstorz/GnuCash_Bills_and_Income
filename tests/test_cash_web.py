@@ -34,7 +34,7 @@ class TestCashSubmit:
         assert response.status_code == 422
 
     def test_valid_submission_returns_batch_result(self):
-        with patch("bill_processor.gnucash_db.create_cash_entry", return_value="z" * 32):
+        with patch("bill_processor.gnucash_db.create_cash_entry", return_value=["z" * 32]):
             response = client.post("/api/cash/submit", json={
                 "entry_date": "2026-03-09",
                 "entries": [{"account_guid": "a" * 32, "memo": "Alice", "amount": 100.0}],
@@ -43,6 +43,24 @@ class TestCashSubmit:
         data = response.json()
         assert data["batch"]["ok"] is True
         assert data["batch"]["total"] == 100.0
+        assert data["batch"]["count"] == 1
+        assert data["batch"]["guids"] == ["z" * 32]
+
+    def test_multiple_entries_report_count(self):
+        with patch("bill_processor.gnucash_db.create_cash_entry",
+                   return_value=["z" * 32, "y" * 32, "x" * 32]):
+            response = client.post("/api/cash/submit", json={
+                "entry_date": "2026-03-09",
+                "entries": [
+                    {"account_guid": "a" * 32, "memo": "A", "amount": 100.0},
+                    {"account_guid": "b" * 32, "memo": "B", "amount": 120.0},
+                    {"account_guid": "c" * 32, "memo": "Changer", "amount": -40.0},
+                ],
+            })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["batch"]["count"] == 3
+        assert data["batch"]["total"] == 180.0
 
     def test_locked_db_returns_500(self):
         with patch("bill_processor.gnucash_db.create_cash_entry",
@@ -55,7 +73,7 @@ class TestCashSubmit:
         assert "locked" in response.json()["detail"].lower()
 
     def test_deposit_failure_included_in_response(self):
-        with patch("bill_processor.gnucash_db.create_cash_entry", return_value="z" * 32), \
+        with patch("bill_processor.gnucash_db.create_cash_entry", return_value=["z" * 32]), \
              patch("bill_processor.gnucash_db.create_cash_deposit",
                    side_effect=RuntimeError("DB locked")):
             response = client.post("/api/cash/submit", json={
@@ -72,7 +90,7 @@ class TestCashSubmit:
         assert "locked" in data["deposit"]["error"].lower()
 
     def test_deposit_success_included_in_response(self):
-        with patch("bill_processor.gnucash_db.create_cash_entry", return_value="z" * 32), \
+        with patch("bill_processor.gnucash_db.create_cash_entry", return_value=["z" * 32]), \
              patch("bill_processor.gnucash_db.create_cash_deposit", return_value="y" * 32):
             response = client.post("/api/cash/submit", json={
                 "entry_date": "2026-03-09",

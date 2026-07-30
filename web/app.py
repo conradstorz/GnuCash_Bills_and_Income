@@ -666,7 +666,7 @@ def cash_submit(body: CashSubmitIn):
             {"account_guid": e.account_guid, "memo": e.memo, "amount": e.amount}
             for e in body.entries
         ]
-        batch_guid = gnucash_db.create_cash_entry(
+        guids = gnucash_db.create_cash_entry(
             entry_date=entry_date,
             line_items=line_items,
         )
@@ -674,8 +674,8 @@ def cash_submit(body: CashSubmitIn):
             if item["memo"].strip():
                 cash_io.save_memo_to_history(item["memo"])
         total = sum(item["amount"] for item in line_items)
-        logger.info(f"Cash entry posted: {len(line_items)} items, total=${total:.2f}, guid={batch_guid[:8]}")
-        result["batch"] = {"ok": True, "guid": batch_guid, "total": total}
+        logger.info(f"Cash entry posted: {len(guids)} transactions, total=${total:.2f}")
+        result["batch"] = {"ok": True, "total": total, "count": len(guids), "guids": guids}
     except Exception as e:
         logger.exception(f"Cash entry failed (date={body.entry_date}, items={len(body.entries)}): {e}")
         raise HTTPException(status_code=500, detail=str(e))
