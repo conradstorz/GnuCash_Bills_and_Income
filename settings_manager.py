@@ -10,11 +10,17 @@ User preferences (paths, thresholds, UI dimensions) are managed here.
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Optional
 from loguru import logger
 
 from bill_processor import config
+
+# Environment variable that overrides the settings-file location. Set by the test
+# harness (tests/conftest.py) so tests never read or write the user's real
+# data/user_settings.json; also handy for containers / alternate environments.
+SETTINGS_FILE_ENV_VAR = "BILL_PROCESSOR_SETTINGS_FILE"
 
 
 class SettingsManager:
@@ -25,9 +31,14 @@ class SettingsManager:
         Initialize settings manager.
         
         Args:
-            settings_file: Path to user_settings.json (defaults to data/user_settings.json)
+            settings_file: Path to user_settings.json. When not given, uses the
+                BILL_PROCESSOR_SETTINGS_FILE env var if set, else
+                data/user_settings.json.
         """
-        self.settings_file = settings_file or (config.PROJECT_ROOT / "data" / "user_settings.json")
+        if settings_file is None:
+            env_path = os.environ.get(SETTINGS_FILE_ENV_VAR)
+            settings_file = Path(env_path) if env_path else (config.PROJECT_ROOT / "data" / "user_settings.json")
+        self.settings_file = Path(settings_file)
         self._settings = {}
         self.load()
     

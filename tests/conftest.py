@@ -5,6 +5,17 @@ import shutil
 from datetime import date
 from pathlib import Path
 from unittest.mock import patch
+import os
+
+# --- Test isolation: never read or write the real data/user_settings.json -----
+# Point the settings layer at a throwaway temp file BEFORE importing any
+# bill_processor module. Importing e.g. bill_processor.web.app constructs the
+# module-level SettingsManager singleton, which binds to its file at construction
+# time. SettingsManager.__init__ honors BILL_PROCESSOR_SETTINGS_FILE, so setting
+# it here (process-wide) guarantees no test can touch the user's real settings.
+_TEST_SETTINGS_FILE = Path(tempfile.mkdtemp(prefix="bp_test_settings_")) / "user_settings.json"
+os.environ["BILL_PROCESSOR_SETTINGS_FILE"] = str(_TEST_SETTINGS_FILE)
+# ------------------------------------------------------------------------------
 
 from bill_processor.config import GNUCASH_DB_PATH
 from bill_processor import gnucash_db
@@ -20,6 +31,26 @@ _helpers = _ilu.module_from_spec(_helpers_spec)
 _helpers_spec.loader.exec_module(_helpers)
 _insert_lock = _helpers._insert_lock
 del _ilu, _helpers_spec, _helpers
+
+
+@pytest.fixture(autouse=True)
+def _isolate_user_settings(tmp_path, monkeypatch):
+    """Give every test its own throwaway user_settings.json.
+
+    Redirects the shared SettingsManager singleton (and the process-wide env
+    override) to a per-test file and resets it to config.py defaults, so no test
+    can read or write the real data/user_settings.json or leak settings into
+    another test.
+    """
+    from bill_processor import settings_manager
+
+    test_file = tmp_path / "user_settings.json"
+    monkeypatch.setenv("BILL_PROCESSOR_SETTINGS_FILE", str(test_file))
+    sm = settings_manager.settings
+    monkeypatch.setattr(sm, "settings_file", test_file)
+    sm._load_defaults()
+    sm.save()
+    yield
 
 
 @pytest.fixture(scope="class")
