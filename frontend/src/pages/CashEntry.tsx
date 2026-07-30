@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getCashAccounts, getMemos, type Account } from '../api/accounts'
-import { submitCash, type CashEntryRow } from '../api/cash'
+import { submitCash } from '../api/cash'
+import { buildCashEntries } from './cashEntryValidation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -70,11 +71,13 @@ function loadDraft(): { entryDate: string; rows: Row[] } | null {
 }
 
 function saveDraft(entryDate: string, rows: Row[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ entryDate, rows })) } catch {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ entryDate, rows })) }
+  catch { /* draft autosave is best-effort; ignore quota/private-mode errors */ }
 }
 
 function clearDraft() {
-  try { localStorage.removeItem(STORAGE_KEY) } catch {}
+  try { localStorage.removeItem(STORAGE_KEY) }
+  catch { /* best-effort; nothing to recover if removal fails */ }
 }
 
 export default function CashEntry() {
@@ -116,11 +119,8 @@ export default function CashEntry() {
   const samuse = rows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0)
 
   const handleSubmit = async () => {
-    const entries: CashEntryRow[] = rows
-      .filter(r => r.account_guid && parseFloat(r.amount) > 0)
-      .map(r => ({ account_guid: r.account_guid, memo: r.memo, amount: parseFloat(r.amount) }))
-
-    if (!entries.length) { setError('Add at least one entry with an account and amount.'); return }
+    const { entries, errors } = buildCashEntries(rows)
+    if (errors.length) { setError(errors.join(' ')); return }
 
     setSubmitting(true)
     setError(null)
