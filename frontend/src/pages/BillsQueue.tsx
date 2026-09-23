@@ -51,6 +51,13 @@ const VendorInput = forwardRef<HTMLInputElement, {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+      if (searchAbortRef.current) searchAbortRef.current.abort()
+    }
+  }, [])
+
   const handleChange = (v: string) => {
     onChange(v)
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
@@ -195,11 +202,13 @@ function EditableRow({
   onSave,
   onCancel,
   isNew,
+  saving,
 }: {
   initial?: Bill
   onSave: (b: BillIn) => void
   onCancel: () => void
   isNew: boolean
+  saving?: boolean
 }) {
   const [vendor, setVendor] = useState(initial?.vendor_name ?? '')
   const [amount, setAmount] = useState(initial?.amount?.toString() ?? '')
@@ -236,6 +245,8 @@ function EditableRow({
     <tr
       className="border-b-2 border-blue-400 bg-blue-50"
       onKeyDown={e => {
+        if (e.repeat) return
+        if (saving) return
         const tag = (e.target as HTMLElement).tagName
         if (e.key === 'Enter' && !e.shiftKey && (tag === 'INPUT' || tag === 'SELECT')) {
           e.preventDefault()
@@ -268,7 +279,7 @@ function EditableRow({
       <td className="px-2 py-1"><Input className="h-7 text-sm" value={billType} onChange={e => setBillType(e.target.value)} placeholder="Bill type" /></td>
       <td className="px-2 py-1">
         <div className="flex gap-1">
-          <Button size="sm" className="text-xs h-7" onClick={handleSave}>{isNew ? 'Add' : 'Save'}</Button>
+          <Button size="sm" className="text-xs h-7" onClick={handleSave} disabled={saving}>{isNew ? 'Add' : 'Save'}</Button>
           <Button size="sm" variant="ghost" className="text-xs h-7" onClick={onCancel}>{isNew ? 'Clear' : 'Cancel'}</Button>
         </div>
       </td>
@@ -439,6 +450,7 @@ export default function BillsQueue() {
                   key={bill.index}
                   initial={bill}
                   isNew={false}
+                  saving={updateMutation.isPending}
                   onSave={b => updateMutation.mutate({ index: bill.index, bill: b })}
                   onCancel={() => setEditingIndex(null)}
                 />
@@ -460,7 +472,7 @@ export default function BillsQueue() {
             )}
             {rowErrors.find(e => e.index === ADD_ROW_INDEX) && (
               <tr>
-                <td colSpan={7} className="px-3 py-1 text-xs text-red-600 bg-red-50">
+                <td colSpan={7} role="alert" className="px-3 py-1 text-xs text-red-600 bg-red-50">
                   {rowErrors.find(e => e.index === ADD_ROW_INDEX)?.message}
                 </td>
               </tr>
@@ -468,6 +480,7 @@ export default function BillsQueue() {
             <EditableRow
               key={`add-${addRowKey}`}
               isNew
+              saving={addMutation.isPending}
               onSave={bill => addMutation.mutate(bill)}
               onCancel={clearAddRow}
             />
