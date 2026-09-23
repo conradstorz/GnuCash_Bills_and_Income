@@ -236,7 +236,8 @@ function EditableRow({
     <tr
       className="border-b-2 border-blue-400 bg-blue-50"
       onKeyDown={e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        const tag = (e.target as HTMLElement).tagName
+        if (e.key === 'Enter' && !e.shiftKey && (tag === 'INPUT' || tag === 'SELECT')) {
           e.preventDefault()
           handleSave()
         }
