@@ -283,7 +283,6 @@ export default function BillsQueue() {
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [addRowKey, setAddRowKey] = useState(0)
-  const resetAddRow = () => setAddRowKey(k => k + 1)
   const [rowErrors, setRowErrors] = useState<RowError[]>([])
   const [postingAll, setPostingAll] = useState(false)
 
@@ -297,12 +296,15 @@ export default function BillsQueue() {
   const clearRowError = (index: number) =>
     setRowErrors(prev => prev.filter(e => e.index !== index))
 
+  const resetAddRow = () => setAddRowKey(k => k + 1)
+
+  const clearAddRow = () => { clearRowError(ADD_ROW_INDEX); resetAddRow() }
+
   const addMutation = useMutation({
     mutationFn: addBill,
     onSuccess: () => {
       invalidateBills()
-      setRowErrors(prev => prev.filter(e => e.index !== ADD_ROW_INDEX))
-      resetAddRow()
+      clearAddRow()
     },
     onError: (e: unknown) => {
       const axiosDetail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -343,9 +345,9 @@ export default function BillsQueue() {
           index: i,
           message: `${f.vendor_name}: ${f.error}`,
         }))
-        setRowErrors(errors)
+        setRowErrors(prev => [...prev.filter(e => e.index === ADD_ROW_INDEX), ...errors])
       } else {
-        setRowErrors([])
+        setRowErrors(prev => prev.filter(e => e.index === ADD_ROW_INDEX))
       }
     } finally {
       setPostingAll(false)
@@ -467,7 +469,7 @@ export default function BillsQueue() {
               key={`add-${addRowKey}`}
               isNew
               onSave={bill => addMutation.mutate(bill)}
-              onCancel={resetAddRow}
+              onCancel={clearAddRow}
             />
           </tbody>
         </table>
