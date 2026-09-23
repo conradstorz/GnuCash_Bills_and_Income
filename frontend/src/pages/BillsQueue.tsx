@@ -11,7 +11,7 @@ import CreateVendorModal from '../components/CreateVendorModal'
 
 interface RowError { index: number; message: string }
 
-type EditingRow = { mode: 'add' } | { mode: 'edit'; index: number }
+const ADD_ROW_INDEX = -1
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -269,7 +269,7 @@ function EditableRow({
       <td className="px-2 py-1">
         <div className="flex gap-1">
           <Button size="sm" className="text-xs h-7" onClick={handleSave}>{isNew ? 'Add' : 'Save'}</Button>
-          <Button size="sm" variant="ghost" className="text-xs h-7" onClick={onCancel}>Cancel</Button>
+          <Button size="sm" variant="ghost" className="text-xs h-7" onClick={onCancel}>{isNew ? 'Clear' : 'Cancel'}</Button>
         </div>
       </td>
     </tr>
@@ -281,7 +281,9 @@ export default function BillsQueue() {
   const { data: bills = [], isLoading } = useQuery({ queryKey: ['bills'], queryFn: getBills })
   const { data: billErrors = [] } = useQuery({ queryKey: ['bill-errors'], queryFn: getBillErrors })
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
-  const [editing, setEditing] = useState<EditingRow | null>(null)
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [addRowKey, setAddRowKey] = useState(0)
+  const resetAddRow = () => setAddRowKey(k => k + 1)
   const [rowErrors, setRowErrors] = useState<RowError[]>([])
   const [postingAll, setPostingAll] = useState(false)
 
@@ -297,12 +299,21 @@ export default function BillsQueue() {
 
   const addMutation = useMutation({
     mutationFn: addBill,
-    onSuccess: () => { invalidateBills(); setEditing(null) },
+    onSuccess: () => {
+      invalidateBills()
+      setRowErrors(prev => prev.filter(e => e.index !== ADD_ROW_INDEX))
+      resetAddRow()
+    },
+    onError: (e: unknown) => {
+      const axiosDetail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      const msg = axiosDetail ?? (e instanceof Error ? e.message : 'Could not add bill')
+      setRowErrors(prev => [...prev.filter(r => r.index !== ADD_ROW_INDEX), { index: ADD_ROW_INDEX, message: msg }])
+    },
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ index, bill }: { index: number; bill: BillIn }) => updateBill(index, bill),
-    onSuccess: () => { invalidateBills(); setEditing(null) },
+    onSuccess: () => { invalidateBills(); setEditingIndex(null) },
   })
 
   const deleteMutation = useMutation({
@@ -357,7 +368,6 @@ export default function BillsQueue() {
           >
             {postingAll ? 'Processing...' : 'Post All'}
           </Button>
-          <Button size="sm" onClick={() => setEditing({ mode: 'add' })}>+ Add Bill</Button>
         </div>
       </div>
 
@@ -421,28 +431,21 @@ export default function BillsQueue() {
             </tr>
           </thead>
           <tbody>
-            {editing?.mode === 'add' && (
-              <EditableRow
-                isNew
-                onSave={bill => addMutation.mutate(bill)}
-                onCancel={() => setEditing(null)}
-              />
-            )}
             {bills.map(bill =>
-              editing?.mode === 'edit' && editing.index === bill.index ? (
+              editingIndex === bill.index ? (
                 <EditableRow
                   key={bill.index}
                   initial={bill}
                   isNew={false}
                   onSave={b => updateMutation.mutate({ index: bill.index, bill: b })}
-                  onCancel={() => setEditing(null)}
+                  onCancel={() => setEditingIndex(null)}
                 />
               ) : (
                 <BillRow
                   key={bill.index}
                   bill={bill}
                   canPost={canPost}
-                  onEdit={() => setEditing({ mode: 'edit', index: bill.index })}
+                  onEdit={() => setEditingIndex(bill.index)}
                   onDelete={() => {
                     if (confirm(`Delete bill for ${bill.vendor_name}?`)) {
                       deleteMutation.mutate(bill.index)
@@ -453,13 +456,19 @@ export default function BillsQueue() {
                 />
               )
             )}
-            {bills.length === 0 && !editing && (
+            {rowErrors.find(e => e.index === ADD_ROW_INDEX) && (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-slate-400 text-sm">
-                  No bills in queue. Click &quot;+ Add Bill&quot; to add one.
+                <td colSpan={7} className="px-3 py-1 text-xs text-red-600 bg-red-50">
+                  {rowErrors.find(e => e.index === ADD_ROW_INDEX)?.message}
                 </td>
               </tr>
             )}
+            <EditableRow
+              key={`add-${addRowKey}`}
+              isNew
+              onSave={bill => addMutation.mutate(bill)}
+              onCancel={resetAddRow}
+            />
           </tbody>
         </table>
       </div>
