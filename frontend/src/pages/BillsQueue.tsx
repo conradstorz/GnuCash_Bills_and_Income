@@ -89,6 +89,7 @@ const VendorInput = forwardRef<HTMLInputElement, {
           placeholder="Vendor"
           autoFocus
           onChange={e => handleChange(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') setOpen(false) }}
           onFocus={() => {
             if (suggestions.length > 0 || showAddNew) { computePos(); setOpen(true) }
           }}
@@ -232,7 +233,15 @@ function EditableRow({
   }
 
   return (
-    <tr className="border-b-2 border-blue-400 bg-blue-50">
+    <tr
+      className="border-b-2 border-blue-400 bg-blue-50"
+      onKeyDown={e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault()
+          handleSave()
+        }
+      }}
+    >
       <td className="px-2 py-1">
         <VendorInput
           ref={vendorRef}
