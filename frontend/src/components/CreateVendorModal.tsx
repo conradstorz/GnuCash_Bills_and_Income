@@ -99,7 +99,7 @@ export default function CreateVendorModal({ initialName, onCreated, onClose }: P
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      onKeyDown={e => e.stopPropagation()}
+      onKeyDown={e => { if (e.key === 'Enter') e.stopPropagation() }}
     >
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4">
         {/* Header */}
