@@ -280,7 +280,7 @@ function EditableRow({
       <td className="px-2 py-1">
         <div className="flex gap-1">
           <Button size="sm" className="text-xs h-7" onClick={handleSave} disabled={saving}>{isNew ? 'Add' : 'Save'}</Button>
-          <Button size="sm" variant="ghost" className="text-xs h-7" onClick={onCancel}>{isNew ? 'Clear' : 'Cancel'}</Button>
+          <Button size="sm" variant="ghost" className="text-xs h-7" onClick={onCancel} disabled={saving}>{isNew ? 'Clear' : 'Cancel'}</Button>
         </div>
       </td>
     </tr>
